@@ -880,7 +880,6 @@ macro_rules! default_imp_for_complete_authorize {
 }
 
 default_imp_for_complete_authorize!(
-    connectors::Sift,
     connectors::Vgs,
     connectors::Aci,
     connectors::Adyen,
@@ -943,6 +942,7 @@ default_imp_for_complete_authorize!(
     connectors::Recurly,
     connectors::Riskified,
     connectors::Santander,
+    connectors::Sift,
     connectors::Signifyd,
     connectors::Stax,
     connectors::Square,
@@ -1331,7 +1331,6 @@ macro_rules! default_imp_for_pre_processing_steps{
 }
 
 default_imp_for_pre_processing_steps!(
-    connectors::Sift,
     connectors::Vgs,
     connectors::Aci,
     connectors::Adyenplatform,
@@ -1403,6 +1402,7 @@ default_imp_for_pre_processing_steps!(
     connectors::Recurly,
     connectors::Riskified,
     connectors::Santander,
+    connectors::Sift,
     connectors::Signifyd,
     connectors::Stax,
     connectors::Square,
