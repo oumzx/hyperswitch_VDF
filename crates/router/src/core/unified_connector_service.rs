@@ -12,12 +12,14 @@ use hyperswitch_domain_models::{
     merchant_context::MerchantContext,
     router_data::{ConnectorAuthType, ErrorResponse, RouterData},
     router_response_types::PaymentsResponseData,
+    payment_method_data::WalletData,
 };
 use masking::{ExposeInterface, PeekInterface, Secret};
 use router_env::logger;
 use unified_connector_service_client::payments::{
     self as payments_grpc, payment_method::PaymentMethod, CardDetails, CardPaymentMethodType,
     PaymentServiceAuthorizeResponse, RewardPaymentMethodType,
+    wallet_payment_method_type::WalletType, WalletPaymentMethodType,
 };
 
 use crate::{
@@ -214,6 +216,139 @@ pub fn build_unified_connector_service_payment_method(
                     reward_type,
                 })),
             })
+        }
+        hyperswitch_domain_models::payment_method_data::PaymentMethodData::Wallet(wallet_data) => {
+            match wallet_data {
+                WalletData::ApplePay(apple_pay_wallet_data) => {
+                    Ok(payments_grpc::PaymentMethod {
+                        payment_method: Some(PaymentMethod::Wallet(WalletPaymentMethodType {
+                            wallet_type: Some(WalletType::ApplePay(payments_grpc::AppleWallet {
+                                payment_data: Some(payments_grpc::apple_wallet::PaymentData {
+                                    payment_data: match &apple_pay_wallet_data.payment_data {
+                                        common_types::payments::ApplePayPaymentData::Encrypted(encrypted_data) => {
+                                            Some(payments_grpc::apple_wallet::payment_data::PaymentData::EncryptedData(
+                                                encrypted_data.clone()
+                                            ))
+                                        }
+                                        common_types::payments::ApplePayPaymentData::Decrypted(decrypted_data) => {
+                                            Some(payments_grpc::apple_wallet::payment_data::PaymentData::DecryptedData(
+                                                payments_grpc::ApplePayPredecryptData {
+                                                    application_primary_account_number: decrypted_data.application_primary_account_number.get_card_no(),
+                                                    application_expiration_month: decrypted_data.application_expiration_month.as_ref().peek().to_string(),
+                                                    application_expiration_year: decrypted_data.application_expiration_year.as_ref().peek().to_string(),
+                                                    payment_data: Some(payments_grpc::ApplePayCryptogramData {
+                                                        online_payment_cryptogram: decrypted_data.payment_data.online_payment_cryptogram.as_ref().peek().to_string(),
+                                                        eci_indicator: decrypted_data.payment_data.eci_indicator.clone().unwrap_or_default(),
+                                                    }),
+                                                }
+                                            ))
+                                        }
+                                    },
+                                }),
+                                payment_method: Some(payments_grpc::apple_wallet::PaymentMethod {
+                                    display_name: apple_pay_wallet_data.payment_method.display_name,
+                                    network: apple_pay_wallet_data.payment_method.network,
+                                    r#type: apple_pay_wallet_data.payment_method.pm_type,
+                                }),
+                                transaction_identifier: apple_pay_wallet_data.transaction_identifier,
+                            })),
+                        })),
+                    })
+                }
+                WalletData::GooglePay(google_pay_wallet_data) => {
+                    Ok(payments_grpc::PaymentMethod {
+                        payment_method: Some(PaymentMethod::Wallet(WalletPaymentMethodType {
+                            wallet_type: Some(WalletType::GooglePay(payments_grpc::GoogleWallet {
+                                r#type: google_pay_wallet_data.pm_type,
+                                description: google_pay_wallet_data.description,
+                                info: Some(payments_grpc::google_wallet::PaymentMethodInfo {
+                                    card_network: google_pay_wallet_data.info.card_network,
+                                    card_details: google_pay_wallet_data.info.card_details,
+                                    assurance_details: google_pay_wallet_data.info.assurance_details.map(|details| {
+                                        payments_grpc::google_wallet::payment_method_info::AssuranceDetails {
+                                            card_holder_authenticated: details.card_holder_authenticated,
+                                            account_verified: details.account_verified,
+                                        }
+                                    }),
+                                }),
+                                tokenization_data: Some(payments_grpc::google_wallet::TokenizationData {
+                                    tokenization_data: match &google_pay_wallet_data.tokenization_data {
+                                        common_types::payments::GpayTokenizationData::Encrypted(encrypted_data) => {
+                                            Some(payments_grpc::google_wallet::tokenization_data::TokenizationData::EncryptedData(
+                                                payments_grpc::GpayEncryptedTokenizationData {
+                                                    token_type: encrypted_data.token_type.clone(),
+                                                    token: encrypted_data.token.clone(),
+                                                }
+                                            ))
+                                        }
+                                        common_types::payments::GpayTokenizationData::Decrypted(decrypted_data) => {
+                                            Some(payments_grpc::google_wallet::tokenization_data::TokenizationData::DecryptedData(
+                                                payments_grpc::GPayPredecryptData {
+                                                    card_exp_month: decrypted_data.card_exp_month.as_ref().peek().to_string(),
+                                                    card_exp_year: decrypted_data.card_exp_year.as_ref().peek().to_string(),
+                                                    application_primary_account_number: decrypted_data.application_primary_account_number.get_card_no(),
+                                                    cryptogram: decrypted_data.cryptogram.as_ref().map(|c| c.clone().expose()).unwrap_or_default(),
+                                                    eci_indicator: decrypted_data.eci_indicator.clone(),
+                                                }
+                                            ))
+                                        }
+                                    },
+                                }),
+                            })),
+                        })),
+                    })
+                }
+                WalletData::PaypalRedirect(paypal_redirection) => {
+                    Ok(payments_grpc::PaymentMethod {
+                        payment_method: Some(PaymentMethod::Wallet(WalletPaymentMethodType {
+                            wallet_type: Some(WalletType::PaypalRedirect(payments_grpc::PaypalRedirectWallet {
+                                email: paypal_redirection.email.map(|e| e.expose().expose()),
+                            })),
+                        })),
+                    })
+                }
+                WalletData::AliPayRedirect(_) => {
+                    Ok(payments_grpc::PaymentMethod {
+                        payment_method: Some(PaymentMethod::Wallet(WalletPaymentMethodType {
+                            wallet_type: Some(WalletType::AliPayRedirect(payments_grpc::AliPayRedirectWallet {})),
+                        })),
+                    })
+                }
+                WalletData::CashappQr(_) => {
+                    Ok(payments_grpc::PaymentMethod {
+                        payment_method: Some(PaymentMethod::Wallet(WalletPaymentMethodType {
+                            wallet_type: Some(WalletType::CashappQr(payments_grpc::CashappQrWallet {})),
+                        })),
+                    })
+                }
+                WalletData::AmazonPayRedirect(_) => {
+                    Ok(payments_grpc::PaymentMethod {
+                        payment_method: Some(PaymentMethod::Wallet(WalletPaymentMethodType {
+                            wallet_type: Some(WalletType::AmazonPayRedirect(payments_grpc::AmazonPayRedirectWallet {})),
+                        })),
+                    })
+                }
+                WalletData::WeChatPayQr(_) => {
+                    Ok(payments_grpc::PaymentMethod {
+                        payment_method: Some(PaymentMethod::Wallet(WalletPaymentMethodType {
+                            wallet_type: Some(WalletType::WeChatPayQr(payments_grpc::WeChatPayQrWallet {})),
+                        })),
+                    })
+                }
+                WalletData::RevolutPay(_) => {
+                    Ok(payments_grpc::PaymentMethod {
+                        payment_method: Some(PaymentMethod::Wallet(WalletPaymentMethodType {
+                            wallet_type: Some(WalletType::RevolutPay(payments_grpc::RevolutPayWallet {})),
+                        })),
+                    })
+                }
+                _ => {
+                    return Err(UnifiedConnectorServiceError::NotImplemented(format!(
+                        "Unimplemented payment method subtype: {payment_method_type:?}"
+                    ))
+                    .into());
+                }
+            }
         }
         _ => Err(UnifiedConnectorServiceError::NotImplemented(format!(
             "Unimplemented payment method: {payment_method_data:?}"
