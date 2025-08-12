@@ -10,16 +10,16 @@ use hyperswitch_connectors::utils::CardData;
 use hyperswitch_domain_models::merchant_connector_account::MerchantConnectorAccountTypeDetails;
 use hyperswitch_domain_models::{
     merchant_context::MerchantContext,
+    payment_method_data::WalletData,
     router_data::{ConnectorAuthType, ErrorResponse, RouterData},
     router_response_types::PaymentsResponseData,
-    payment_method_data::WalletData,
 };
 use masking::{ExposeInterface, PeekInterface, Secret};
 use router_env::logger;
 use unified_connector_service_client::payments::{
-    self as payments_grpc, payment_method::PaymentMethod, CardDetails, CardPaymentMethodType,
-    PaymentServiceAuthorizeResponse, RewardPaymentMethodType,
-    wallet_payment_method_type::WalletType, WalletPaymentMethodType,
+    self as payments_grpc, payment_method::PaymentMethod, wallet_payment_method_type::WalletType,
+    CardDetails, CardPaymentMethodType, PaymentServiceAuthorizeResponse, RewardPaymentMethodType,
+    WalletPaymentMethodType,
 };
 
 use crate::{
