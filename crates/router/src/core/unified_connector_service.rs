@@ -9,7 +9,7 @@ use hyperswitch_connectors::utils::CardData;
 use hyperswitch_domain_models::merchant_connector_account::MerchantConnectorAccountTypeDetails;
 use hyperswitch_domain_models::{
     merchant_context::MerchantContext,
-    router_data::{ConnectorAuthType, ErrorResponse, RouterData},
+    router_data::{AccessToken, ConnectorAuthType, ErrorResponse, RouterData},
     router_response_types::PaymentsResponseData,
 };
 use masking::{ExposeInterface, PeekInterface, Secret};
@@ -21,7 +21,7 @@ use unified_connector_service_client::payments::{
 use crate::{
     consts,
     core::{
-        errors::RouterResult,
+        errors::{self, RouterResult},
         payments::helpers::{
             is_ucs_enabled, should_execute_based_on_rollout, MerchantConnectorAccountType,
         },
@@ -32,6 +32,47 @@ use crate::{
 };
 
 mod transformers;
+
+pub fn get_access_token_from_ucs_response(
+    state: Option<&unified_connector_service_client::payments::ConnectorState>
+) -> Option<AccessToken> {
+    state
+        .and_then(|state| state.access_token.as_ref())
+        .map(transformers::convert_grpc_access_token_to_domain)
+}
+
+pub async fn set_access_token_for_ucs(
+    state: &SessionState,
+    merchant_context: &MerchantContext,
+    connector_name: &str,
+    access_token: AccessToken,
+) -> Result<(), errors::StorageError> {
+    let merchant_id = merchant_context.get_merchant_account().get_id();
+    
+    let modified_access_token = AccessToken {
+        expires: access_token.expires
+            .saturating_sub(consts::REDUCE_ACCESS_TOKEN_EXPIRY_TIME.into()),
+        ..access_token
+    };
+
+    router_env::logger::debug!(
+        access_token_expiry_after_modification = modified_access_token.expires,
+        merchant_id = ?merchant_id,
+        connector_name = connector_name
+    );
+
+    if let Err(access_token_set_error) = state.store
+        .set_access_token(merchant_id, connector_name, modified_access_token)
+        .await
+    {
+        // If we are not able to set the access token in redis, the error should just be logged and proceed with the payment
+        // Payments should not fail, once the access token is successfully created
+        // The next request will create new access token, if required
+        router_env::logger::error!(access_token_set_error=?access_token_set_error, "Failed to store UCS access token");
+    }
+    
+    Ok(())
+}
 
 pub async fn should_call_unified_connector_service<F: Clone, T>(
     state: &SessionState,
@@ -155,6 +196,37 @@ pub fn build_unified_connector_service_payment_method(
                 payment_method: Some(upi_type),
             })
         }
+        hyperswitch_domain_models::payment_method_data::PaymentMethodData::BankRedirect(
+            bank_redirect_data,
+        ) => {
+            match bank_redirect_data {
+                hyperswitch_domain_models::payment_method_data::BankRedirectData::OpenBankingUk {
+                    issuer,
+                    country,
+                } => {
+                    let open_banking_uk = payments_grpc::OpenBankingUk {
+                        issuer: issuer.map(|issuer| issuer.to_string()),
+                        country: country.map(|country| country.to_string()),
+                    };
+                    
+                    Ok(payments_grpc::PaymentMethod {
+                        payment_method: Some(PaymentMethod::OnlineBanking(
+                            payments_grpc::OnlineBankingPaymentMethodType {
+                                online_banking_type: Some(
+                                    payments_grpc::online_banking_payment_method_type::OnlineBankingType::OpenBankingUk(open_banking_uk)
+                                ),
+                            }
+                        )),
+                    })
+                }
+                _ => {
+                    Err(UnifiedConnectorServiceError::NotImplemented(format!(
+                        "Unimplemented bank redirect type: {bank_redirect_data:?}"
+                    ))
+                    .into())
+                }
+            }
+        }
         _ => Err(UnifiedConnectorServiceError::NotImplemented(format!(
             "Unimplemented payment method: {payment_method_data:?}"
         ))
@@ -214,6 +286,7 @@ pub fn build_unified_connector_service_auth_metadata(
             auth_type: consts::UCS_AUTH_SIGNATURE_KEY.to_string(),
             api_key: Some(api_key.clone()),
             key1: Some(key1.clone()),
+            key2: None,
             api_secret: Some(api_secret.clone()),
             merchant_id: Secret::new(merchant_id.to_string()),
         }),
@@ -222,6 +295,7 @@ pub fn build_unified_connector_service_auth_metadata(
             auth_type: consts::UCS_AUTH_BODY_KEY.to_string(),
             api_key: Some(api_key.clone()),
             key1: Some(key1.clone()),
+            key2: None,
             api_secret: None,
             merchant_id: Secret::new(merchant_id.to_string()),
         }),
@@ -230,7 +304,22 @@ pub fn build_unified_connector_service_auth_metadata(
             auth_type: consts::UCS_AUTH_HEADER_KEY.to_string(),
             api_key: Some(api_key.clone()),
             key1: None,
+            key2: None,
             api_secret: None,
+            merchant_id: Secret::new(merchant_id.to_string()),
+        }),
+        ConnectorAuthType::MultiAuthKey {
+            api_key,
+            key1,
+            api_secret,
+            key2,
+        } => Ok(ConnectorAuthMetadata {
+            connector_name,
+            auth_type: consts::UCS_AUTH_MULTI_KEY.to_string(),
+            api_key: Some(api_key.clone()),
+            key1: Some(key1.clone()),
+            key2: Some(key2.clone()),
+            api_secret: Some(api_secret.clone()),
             merchant_id: Secret::new(merchant_id.to_string()),
         }),
         _ => Err(UnifiedConnectorServiceError::FailedToObtainAuthType)
