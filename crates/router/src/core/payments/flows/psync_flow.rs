@@ -168,8 +168,14 @@ impl Feature<api::PSync, types::PaymentsSyncData>
         merchant_context: &domain::MerchantContext,
         creds_identifier: Option<&str>,
     ) -> RouterResult<types::AddAccessTokenResult> {
-        access_token::add_access_token(state, connector, merchant_context, self, creds_identifier)
-            .await
+        Box::pin(access_token::add_access_token(
+            state,
+            connector,
+            merchant_context,
+            self,
+            creds_identifier,
+        ))
+        .await
     }
 
     async fn build_flow_specific_connector_request(
@@ -220,6 +226,15 @@ impl Feature<api::PSync, types::PaymentsSyncData>
         merchant_connector_account: domain::MerchantConnectorAccountTypeDetails,
         merchant_context: &domain::MerchantContext,
     ) -> RouterResult<()> {
+        let merchant_id = merchant_context.get_merchant_account().get_id();
+        if let Ok(Some(cached_access_token)) = state.store
+            .get_access_token(merchant_id, &self.connector)
+            .await
+        {
+            self.access_token = Some(cached_access_token);
+            logger::debug!("Using cached access token for UCS psync call to connector: {}", self.connector);
+        }
+
         let client = state
             .grpc_client
             .unified_connector_service_client

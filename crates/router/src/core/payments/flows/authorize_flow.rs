@@ -250,8 +250,14 @@ impl Feature<api::Authorize, types::PaymentsAuthorizeData> for types::PaymentsAu
         merchant_context: &domain::MerchantContext,
         creds_identifier: Option<&str>,
     ) -> RouterResult<types::AddAccessTokenResult> {
-        access_token::add_access_token(state, connector, merchant_context, self, creds_identifier)
-            .await
+        Box::pin(access_token::add_access_token(
+            state,
+            connector,
+            merchant_context,
+            self,
+            creds_identifier,
+        ))
+        .await
     }
 
     async fn add_session_token<'a>(
@@ -833,6 +839,15 @@ async fn call_unified_connector_service_authorize(
     #[cfg(feature = "v2")] merchant_connector_account: domain::MerchantConnectorAccountTypeDetails,
     merchant_context: &domain::MerchantContext,
 ) -> RouterResult<()> {
+    let merchant_id = merchant_context.get_merchant_account().get_id();
+    if let Ok(Some(cached_access_token)) = state.store
+        .get_access_token(merchant_id, &router_data.connector)
+        .await
+    {
+        router_data.access_token = Some(cached_access_token);
+        logger::debug!("Using cached access token for UCS call to connector: {}", router_data.connector);
+    }
+
     let client = state
         .grpc_client
         .unified_connector_service_client
@@ -942,7 +957,6 @@ async fn call_unified_connector_service_repeat_payment(
         .change_context(ApiErrorResponse::InternalServerError)
         .attach_printable("Failed to deserialize UCS response")?;
 
-    // Extract and store access token if present
     if let Some(access_token) = get_access_token_from_ucs_response(
         payment_repeat_response.state.as_ref()
     ) {
