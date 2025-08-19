@@ -557,7 +557,6 @@ impl ConnectorIntegration<Authorize, PaymentsAuthorizeData, PaymentsResponseData
         ))?;
         let connector_req =
             authorizedotnet::CreateTransactionRequest::try_from(&connector_router_data)?;
-
         Ok(RequestContent::Json(Box::new(connector_req)))
     }
 
