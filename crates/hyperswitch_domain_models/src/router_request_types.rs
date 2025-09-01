@@ -485,6 +485,17 @@ impl TryFrom<PaymentsAuthorizeData> for CreateOrderRequestData {
     }
 }
 
+// impl TryFrom<PaymentsAuthorizeData> for CreateOrderRequestData {
+//     type Error = error_stack::Report<ApiErrorResponse>;
+
+//     fn try_from(data: PaymentsAuthorizeData) -> Result<Self, Self::Error> {
+//         Ok(Self {
+//             minor_amount: data.minor_amount,
+//             currency: data.currency,
+//         })
+//     }
+// }
+
 impl TryFrom<ExternalVaultProxyPaymentsData> for CreateOrderRequestData {
     type Error = error_stack::Report<ApiErrorResponse>;
 
@@ -520,6 +531,17 @@ pub struct PaymentsPreProcessingData {
     pub split_payments: Option<common_types::payments::SplitPaymentsRequest>,
 
     // New amount for amount frame work
+    pub minor_amount: Option<MinorUnit>,
+}
+
+#[derive(Debug, Clone)]
+pub struct GiftCardBalanceCheckRequestData {
+    pub payment_method_data: Option<PaymentMethodData>,
+    pub payment_method_type: Option<storage_enums::PaymentMethodType>,
+
+    pub gift_card_number: Secret<String>,
+    pub gift_card_cvc: Secret<String>,
+    pub currency: Option<storage_enums::Currency>,
     pub minor_amount: Option<MinorUnit>,
 }
 
