@@ -544,11 +544,22 @@ impl PaymentAttempt {
         storage_scheme: storage_enums::MerchantStorageScheme,
         request: &api_models::payments::PaymentsConfirmIntentRequest,
         encrypted_data: DecryptedPaymentAttempt,
-    ) -> CustomResult<Self, errors::api_error_response::ApiErrorResponse> {
-        let id = id_type::GlobalAttemptId::generate(&cell_id);
+    ) -> CustomResult<Vec<Self>, errors::api_error_response::ApiErrorResponse> {
+        let id_1 = id_type::GlobalAttemptId::generate(&cell_id);
+        let id_2 = id_type::GlobalAttemptId::generate(&cell_id);
+
         let intent_amount_details = payment_intent.amount_details.clone();
 
-        let attempt_amount_details = intent_amount_details.create_attempt_amount_details(request);
+        let mut attempt_amount_details_1 =
+            intent_amount_details.create_attempt_amount_details(request);
+
+        let mut attempt_amount_details_2 = attempt_amount_details_1.clone();
+
+        if let Some(data) = request.split_payment_method_data.clone() {
+            attempt_amount_details_1.net_amount =
+                attempt_amount_details_1.net_amount - data.split_amount.into();
+            attempt_amount_details_2.net_amount = data.split_amount.into();
+        }
 
         let now = common_utils::date_time::now();
 
@@ -572,10 +583,10 @@ impl PaymentAttempt {
 
         let authentication_type = payment_intent.authentication_type.unwrap_or_default();
 
-        Ok(Self {
+        let attempt_1 = Self {
             payment_id: payment_intent.id.clone(),
             merchant_id: payment_intent.merchant_id.clone(),
-            amount_details: attempt_amount_details,
+            amount_details: attempt_amount_details_1,
             status: common_enums::AttemptStatus::Started,
             // This will be decided by the routing algorithm and updated in update trackers
             // right before calling the connector
@@ -617,14 +628,22 @@ impl PaymentAttempt {
             payment_method_billing_address,
             error: None,
             connector_token_details: connector_token,
-            id,
+            id: id_1,
             card_discovery: None,
             feature_metadata: None,
             processor_merchant_id: payment_intent.merchant_id.clone(),
             created_by: None,
             connector_request_reference_id: None,
             network_transaction_id: None,
-        })
+        };
+
+        let mut attempt_2 = attempt_1.clone();
+        attempt_2.id = id_2;
+        attempt_2.amount_details = attempt_amount_details_2;
+        attempt_2.payment_method_type = common_enums::PaymentMethod::GiftCard;
+        attempt_2.payment_method_subtype = common_enums::PaymentMethodType::Givex;
+
+        Ok(vec![attempt_1, attempt_2])
     }
 
     #[cfg(feature = "v2")]

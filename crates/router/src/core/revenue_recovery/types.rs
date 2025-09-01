@@ -401,11 +401,12 @@ impl Action {
 
                 // handle proxy api's response
                 match response {
-                    Ok(payment_data) => match payment_data.payment_attempt.status.foreign_into() {
+                    Ok(payment_data) => match payment_data.payment_attempt[0].status.foreign_into()
+                    {
                         RevenueRecoveryPaymentsAttemptStatus::Succeeded => {
                             let recovery_payment_attempt =
                                 hyperswitch_domain_models::revenue_recovery::RecoveryPaymentAttempt::from(
-                                    &payment_data.payment_attempt,
+                                    &payment_data.payment_attempt[0],
                                 );
 
                             let recovery_payment_tuple =
@@ -429,7 +430,7 @@ impl Action {
 
                             let is_hard_decline = revenue_recovery::check_hard_decline(
                                 state,
-                                &payment_data.payment_attempt,
+                                &payment_data.payment_attempt[0],
                             )
                             .await
                             .ok();
@@ -451,13 +452,13 @@ impl Action {
                 .await;
 
                             Ok(Self::SuccessfulPayment(
-                                payment_data.payment_attempt.clone(),
+                                payment_data.payment_attempt[0].clone(),
                             ))
                         }
                         RevenueRecoveryPaymentsAttemptStatus::Failed => {
                             let recovery_payment_attempt =
                                 hyperswitch_domain_models::revenue_recovery::RecoveryPaymentAttempt::from(
-                                    &payment_data.payment_attempt,
+                                    &payment_data.payment_attempt[0],
                                 );
 
                             let recovery_payment_tuple =
@@ -479,15 +480,14 @@ impl Action {
                                 );
                             };
 
-                            let error_code = payment_data
-                                .payment_attempt
+                            let error_code = payment_data.payment_attempt[0]
                                 .clone()
                                 .error
                                 .map(|error| error.code);
 
                             let is_hard_decline = revenue_recovery::check_hard_decline(
                                 state,
-                                &payment_data.payment_attempt,
+                                &payment_data.payment_attempt[0],
                             )
                             .await
                             .ok();
@@ -519,11 +519,13 @@ impl Action {
                             .await?;
 
                             // Return terminal failure to finish the current execute workflow
-                            Ok(Self::TerminalFailure(payment_data.payment_attempt.clone()))
+                            Ok(Self::TerminalFailure(
+                                payment_data.payment_attempt[0].clone(),
+                            ))
                         }
 
                         RevenueRecoveryPaymentsAttemptStatus::Processing => {
-                            Ok(Self::SyncPayment(payment_data.payment_attempt.clone()))
+                            Ok(Self::SyncPayment(payment_data.payment_attempt[0].clone()))
                         }
                         RevenueRecoveryPaymentsAttemptStatus::InvalidStatus(action) => {
                             logger::info!(?action, "Invalid Payment Status For PCR Payment");

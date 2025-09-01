@@ -10953,7 +10953,7 @@ impl<F: Clone> OperationSessionSetters<F> for PaymentIntentData<F> {
 #[cfg(feature = "v2")]
 impl<F: Clone> OperationSessionGetters<F> for PaymentConfirmData<F> {
     fn get_payment_attempt(&self) -> &storage::PaymentAttempt {
-        &self.payment_attempt
+        &self.payment_attempt[0]
     }
     #[cfg(feature = "v2")]
     fn list_payments_attempts(&self) -> &Vec<storage::PaymentAttempt> {
@@ -11061,11 +11061,11 @@ impl<F: Clone> OperationSessionGetters<F> for PaymentConfirmData<F> {
     }
 
     fn get_payment_attempt_connector(&self) -> Option<&str> {
-        self.payment_attempt.connector.as_deref()
+        self.payment_attempt[0].connector.as_deref()
     }
 
     fn get_merchant_connector_id_in_attempt(&self) -> Option<id_type::MerchantConnectorAccountId> {
-        self.payment_attempt.merchant_connector_id.clone()
+        self.payment_attempt[0].merchant_connector_id.clone()
     }
 
     fn get_connector_customer_id(&self) -> Option<String> {
@@ -11101,7 +11101,7 @@ impl<F: Clone> OperationSessionGetters<F> for PaymentConfirmData<F> {
     }
 
     fn get_optional_payment_attempt(&self) -> Option<&storage::PaymentAttempt> {
-        Some(&self.payment_attempt)
+        Some(&self.payment_attempt[0])
     }
 
     fn get_pre_routing_result(
@@ -11135,7 +11135,7 @@ impl<F: Clone> OperationSessionSetters<F> for PaymentConfirmData<F> {
         todo!()
     }
     fn set_payment_attempt(&mut self, payment_attempt: storage::PaymentAttempt) {
-        self.payment_attempt = payment_attempt;
+        self.payment_attempt = vec![payment_attempt];
     }
 
     fn set_payment_method_data(&mut self, _payment_method_data: Option<domain::PaymentMethodData>) {
@@ -11186,7 +11186,7 @@ impl<F: Clone> OperationSessionSetters<F> for PaymentConfirmData<F> {
         &mut self,
         merchant_connector_id: Option<id_type::MerchantConnectorAccountId>,
     ) {
-        self.payment_attempt.merchant_connector_id = merchant_connector_id;
+        self.payment_attempt[0].merchant_connector_id = merchant_connector_id;
     }
 
     fn set_frm_message(&mut self, _frm_message: FraudCheck) {
@@ -11224,15 +11224,15 @@ impl<F: Clone> OperationSessionSetters<F> for PaymentConfirmData<F> {
     }
 
     fn set_connector_in_payment_attempt(&mut self, connector: Option<String>) {
-        self.payment_attempt.connector = connector;
+        self.payment_attempt[0].connector = connector;
     }
 
     fn set_connector_request_reference_id(&mut self, reference_id: Option<String>) {
-        self.payment_attempt.connector_request_reference_id = reference_id;
+        self.payment_attempt[0].connector_request_reference_id = reference_id;
     }
 
     fn set_connector_response_reference_id(&mut self, reference_id: Option<String>) {
-        self.payment_attempt.connector_response_reference_id = reference_id;
+        self.payment_attempt[0].connector_response_reference_id = reference_id;
     }
 
     fn set_vault_session_details(

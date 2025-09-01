@@ -909,8 +909,9 @@ where
 {
     pub flow: PhantomData<F>,
     pub payment_intent: PaymentIntent,
-    pub payment_attempt: PaymentAttempt,
+    pub payment_attempt: Vec<PaymentAttempt>,
     pub payment_method_data: Option<payment_method_data::PaymentMethodData>,
+    pub split_payment_method_data: Option<api_models::payments::SplitPaymentMethodData>,
     pub payment_address: payment_address::PaymentAddress,
     pub mandate_data: Option<api_models::payments::MandateIds>,
     pub payment_method: Option<payment_methods::PaymentMethod>,
@@ -949,7 +950,7 @@ impl<F: Clone> PaymentConfirmData<F> {
         payment_method_id: id_type::GlobalPaymentMethodId,
         payment_method: payment_methods::PaymentMethod,
     ) {
-        self.payment_attempt.payment_method_id = Some(payment_method_id);
+        self.payment_attempt[0].payment_method_id = Some(payment_method_id);
         self.payment_method = Some(payment_method);
     }
 }

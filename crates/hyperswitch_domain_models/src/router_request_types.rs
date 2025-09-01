@@ -2,7 +2,9 @@ pub mod authentication;
 pub mod fraud_check;
 pub mod revenue_recovery;
 pub mod unified_authentication_service;
-use api_models::payments::{AdditionalPaymentData, RequestSurchargeDetails};
+use api_models::payments::{
+    AdditionalPaymentData, RequestSurchargeDetails, SplitPaymentMethodData,
+};
 use common_types::payments as common_payments_types;
 use common_utils::{consts, errors, ext_traits::OptionExt, id_type, pii, types::MinorUnit};
 use diesel_models::{enums as storage_enums, types::OrderDetailsWithAmount};
@@ -33,6 +35,7 @@ pub struct PaymentsAuthorizeData {
     /// get_tax_on_surcharge_amount()
     /// get_total_surcharge_amount() // returns surcharge_amount + tax_on_surcharge_amount
     /// ```
+    pub split_payment_method_data: Option<SplitPaymentMethodData>,
     pub amount: i64,
     pub order_tax_amount: Option<MinorUnit>,
     pub email: Option<pii::Email>,

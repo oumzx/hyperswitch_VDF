@@ -2623,7 +2623,7 @@ impl<F: Clone> PostUpdateTracker<F, PaymentConfirmData<F>, types::PaymentsAuthor
             .update_payment_attempt(
                 key_manager_state,
                 key_store,
-                payment_data.payment_attempt,
+                payment_data.payment_attempt[0].clone(),
                 payment_attempt_update,
                 storage_scheme,
             )
@@ -2634,7 +2634,10 @@ impl<F: Clone> PostUpdateTracker<F, PaymentConfirmData<F>, types::PaymentsAuthor
         let attempt_status = updated_payment_attempt.status;
 
         payment_data.payment_intent = updated_payment_intent;
-        payment_data.payment_attempt = updated_payment_attempt;
+        payment_data.payment_attempt = vec![
+            updated_payment_attempt,
+            payment_data.payment_attempt[1].clone(),
+        ];
 
         if let Some(payment_method) = &payment_data.payment_method {
             match attempt_status {
@@ -2872,48 +2875,8 @@ impl
             PaymentConfirmData<hyperswitch_domain_models::router_flow_types::ExternalVaultProxy>,
         >,
     {
-        use hyperswitch_domain_models::router_data::TrackerPostUpdateObjects;
-
-        let db = &*state.store;
-        let key_manager_state = &state.into();
-
-        let response_router_data = response;
-
-        let payment_intent_update =
-            response_router_data.get_payment_intent_update(&payment_data, storage_scheme);
-        let payment_attempt_update =
-            response_router_data.get_payment_attempt_update(&payment_data, storage_scheme);
-
-        let updated_payment_intent = db
-            .update_payment_intent(
-                key_manager_state,
-                payment_data.payment_intent,
-                payment_intent_update,
-                key_store,
-                storage_scheme,
-            )
-            .await
-            .change_context(errors::ApiErrorResponse::InternalServerError)
-            .attach_printable("Unable to update payment intent")?;
-
-        let updated_payment_attempt = db
-            .update_payment_attempt(
-                key_manager_state,
-                key_store,
-                payment_data.payment_attempt,
-                payment_attempt_update,
-                storage_scheme,
-            )
-            .await
-            .change_context(errors::ApiErrorResponse::InternalServerError)
-            .attach_printable("Unable to update payment attempt")?;
-
-        payment_data.payment_intent = updated_payment_intent;
-        payment_data.payment_attempt = updated_payment_attempt;
-
+        todo!()
         // TODO: Add external vault specific post-update logic if needed
-
-        Ok(payment_data)
     }
 }
 
@@ -2939,46 +2902,7 @@ impl<F: Clone> PostUpdateTracker<F, PaymentConfirmData<F>, types::SetupMandateRe
                 PaymentConfirmData<F>,
             >,
     {
-        use hyperswitch_domain_models::router_data::TrackerPostUpdateObjects;
-
-        let db = &*state.store;
-        let key_manager_state = &state.into();
-
-        let response_router_data = response;
-
-        let payment_intent_update =
-            response_router_data.get_payment_intent_update(&payment_data, storage_scheme);
-        let payment_attempt_update =
-            response_router_data.get_payment_attempt_update(&payment_data, storage_scheme);
-
-        let updated_payment_intent = db
-            .update_payment_intent(
-                key_manager_state,
-                payment_data.payment_intent,
-                payment_intent_update,
-                key_store,
-                storage_scheme,
-            )
-            .await
-            .change_context(errors::ApiErrorResponse::InternalServerError)
-            .attach_printable("Unable to update payment intent")?;
-
-        let updated_payment_attempt = db
-            .update_payment_attempt(
-                key_manager_state,
-                key_store,
-                payment_data.payment_attempt,
-                payment_attempt_update,
-                storage_scheme,
-            )
-            .await
-            .change_context(errors::ApiErrorResponse::InternalServerError)
-            .attach_printable("Unable to update payment attempt")?;
-
-        payment_data.payment_intent = updated_payment_intent;
-        payment_data.payment_attempt = updated_payment_attempt;
-
-        Ok(payment_data)
+        todo!()
     }
 
     async fn save_pm_and_mandate<'b>(
@@ -2996,90 +2920,7 @@ impl<F: Clone> PostUpdateTracker<F, PaymentConfirmData<F>, types::SetupMandateRe
     where
         F: 'b + Clone + Send + Sync,
     {
-        // If we received a payment_method_id from connector in the router data response
-        // Then we either update the payment method or create a new payment method
-        // The case for updating the payment method is when the payment is created from the payment method service
-
-        let Ok(payments_response) = &router_data.response else {
-            // In case there was an error response from the connector
-            // We do not take any action related to the payment method
-            return Ok(());
-        };
-
-        let connector_request_reference_id = payment_data
-            .payment_attempt
-            .connector_token_details
-            .as_ref()
-            .and_then(|token_details| token_details.get_connector_token_request_reference_id());
-
-        let connector_token =
-            payments_response.get_updated_connector_token_details(connector_request_reference_id);
-
-        let payment_method_id = payment_data.payment_attempt.payment_method_id.clone();
-
-        // TODO: check what all conditions we will need to see if card need to be saved
-        match (
-            connector_token
-                .as_ref()
-                .and_then(|connector_token| connector_token.connector_mandate_id.clone()),
-            payment_method_id,
-        ) {
-            (Some(token), Some(payment_method_id)) => {
-                if !matches!(
-                    router_data.status,
-                    enums::AttemptStatus::Charged | enums::AttemptStatus::Authorized
-                ) {
-                    return Ok(());
-                }
-                let connector_id = payment_data
-                    .payment_attempt
-                    .merchant_connector_id
-                    .clone()
-                    .get_required_value("merchant_connector_id")
-                    .change_context(errors::ApiErrorResponse::InternalServerError)
-                    .attach_printable("missing connector id")?;
-
-                let net_amount = payment_data.payment_attempt.amount_details.get_net_amount();
-                let currency = payment_data.payment_intent.amount_details.currency;
-
-                let connector_token_details_for_payment_method_update =
-                    api_models::payment_methods::ConnectorTokenDetails {
-                        connector_id,
-                        status: common_enums::ConnectorTokenStatus::Active,
-                        connector_token_request_reference_id: connector_token
-                            .and_then(|details| details.connector_token_request_reference_id),
-                        original_payment_authorized_amount: Some(net_amount),
-                        original_payment_authorized_currency: Some(currency),
-                        metadata: None,
-                        token: masking::Secret::new(token),
-                        token_type: common_enums::TokenizationType::MultiUse,
-                    };
-
-                let payment_method_update_request =
-                    api_models::payment_methods::PaymentMethodUpdate {
-                        payment_method_data: None,
-                        connector_token_details: Some(
-                            connector_token_details_for_payment_method_update,
-                        ),
-                    };
-
-                payment_methods::update_payment_method_core(
-                    state,
-                    merchant_context,
-                    business_profile,
-                    payment_method_update_request,
-                    &payment_method_id,
-                )
-                .await
-                .attach_printable("Failed to update payment method")?;
-            }
-            (Some(_), None) => {
-                // TODO: create a new payment method
-            }
-            (None, Some(_)) | (None, None) => {}
-        }
-
-        Ok(())
+        todo!()
     }
 }
 

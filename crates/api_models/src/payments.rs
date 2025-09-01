@@ -5577,6 +5577,14 @@ pub struct PaymentsListResponseItem {
     pub modified_at: Option<PrimitiveDateTime>,
 }
 
+#[derive(Clone, Debug, serde::Deserialize, serde::Serialize, ToSchema)]
+pub struct SplitPaymentMethodData {
+    pub payment_method_data: PaymentMethodData,
+    #[serde(default, deserialize_with = "amount::deserialize")]
+    pub split_amount: Amount,
+    pub payment_method_type: api_enums::PaymentMethod,
+}
+
 // Serialize is implemented because, this will be serialized in the api events.
 // Usually request types should not have serialize implemented.
 //
@@ -5592,6 +5600,8 @@ pub struct PaymentsConfirmIntentRequest {
 
     /// The payment instrument data to be used for the payment
     pub payment_method_data: PaymentMethodDataRequest,
+
+    pub split_payment_method_data: Option<SplitPaymentMethodData>,
 
     /// The payment method type to be used for the payment. This should match with the `payment_method_data` provided
     #[schema(value_type = PaymentMethod, example = "card")]
@@ -5900,6 +5910,7 @@ impl From<&PaymentsRequest> for PaymentsConfirmIntentRequest {
             customer_acceptance: request.customer_acceptance.clone(),
             browser_info: request.browser_info.clone(),
             payment_method_id: request.payment_method_id.clone(),
+            split_payment_method_data: None,
             payment_token: None,
             merchant_connector_details: request.merchant_connector_details.clone(),
             return_raw_connector_response: request.return_raw_connector_response,

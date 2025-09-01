@@ -204,7 +204,7 @@ impl<F: Send + Clone + Sync> GetTracker<F, PaymentConfirmData<F>, PaymentsConfir
                 .change_context(errors::ApiErrorResponse::InternalServerError)
                 .attach_printable("Failed while encrypting payment intent details")?;
 
-        let payment_attempt_domain_model =
+        let mut payment_attempt_domain_models =
             hyperswitch_domain_models::payments::payment_attempt::PaymentAttempt::create_domain_model(
                 &payment_intent,
                 cell_id,
@@ -214,11 +214,24 @@ impl<F: Send + Clone + Sync> GetTracker<F, PaymentConfirmData<F>, PaymentsConfir
             )
             .await?;
 
-        let payment_attempt: hyperswitch_domain_models::payments::payment_attempt::PaymentAttempt =
+        let payment_attempt_1: hyperswitch_domain_models::payments::payment_attempt::PaymentAttempt =
             db.insert_payment_attempt(
                 key_manager_state,
                 merchant_context.get_merchant_key_store(),
-                payment_attempt_domain_model,
+                payment_attempt_domain_models[0].clone(),
+                storage_scheme,
+            )
+            .await
+            .change_context(errors::ApiErrorResponse::InternalServerError)
+            .attach_printable("Could not insert payment attempt")?;
+
+        payment_attempt_domain_models[1].status = common_enums::AttemptStatus::Authorized;
+        payment_attempt_domain_models[1].connector = Some("adyen".to_string());
+        let mut payment_attempt_2: hyperswitch_domain_models::payments::payment_attempt::PaymentAttempt =
+            db.insert_payment_attempt(
+                key_manager_state,
+                merchant_context.get_merchant_key_store(),
+                payment_attempt_domain_models[1].clone(),
                 storage_scheme,
             )
             .await
@@ -257,7 +270,7 @@ impl<F: Send + Clone + Sync> GetTracker<F, PaymentConfirmData<F>, PaymentsConfir
                 .billing_address
                 .clone()
                 .map(|address| address.into_inner()),
-            payment_attempt
+            payment_attempt_1
                 .payment_method_billing_address
                 .clone()
                 .map(|address| address.into_inner()),
@@ -269,8 +282,9 @@ impl<F: Send + Clone + Sync> GetTracker<F, PaymentConfirmData<F>, PaymentsConfir
         let payment_data = PaymentConfirmData {
             flow: std::marker::PhantomData,
             payment_intent,
-            payment_attempt,
+            payment_attempt: vec![payment_attempt_1, payment_attempt_2],
             payment_method_data,
+            split_payment_method_data: request.split_payment_method_data.clone(),
             payment_address,
             mandate_data: None,
             payment_method: None,
@@ -332,7 +346,7 @@ impl<F: Clone + Send + Sync> Domain<F, PaymentsConfirmIntentRequest, PaymentConf
         };
 
         if let Some(auth_type) = authentication_type {
-            payment_data.payment_attempt.authentication_type = auth_type;
+            payment_data.payment_attempt[0].authentication_type = auth_type;
         }
 
         Ok(())
@@ -387,7 +401,7 @@ impl<F: Clone + Send + Sync> Domain<F, PaymentsConfirmIntentRequest, PaymentConf
             .connector
             .generate_connector_request_reference_id(
                 &payment_data.payment_intent,
-                &payment_data.payment_attempt,
+                &payment_data.payment_attempt[0],
             );
         payment_data.set_connector_request_reference_id(Some(connector_request_reference_id));
         Ok(())
@@ -402,9 +416,9 @@ impl<F: Clone + Send + Sync> Domain<F, PaymentsConfirmIntentRequest, PaymentConf
         payment_data: &mut PaymentConfirmData<F>,
     ) -> CustomResult<(), errors::ApiErrorResponse> {
         let (payment_method, payment_method_data) = match (
-            &payment_data.payment_attempt.payment_token,
+            &payment_data.payment_attempt[0].payment_token,
             &payment_data.payment_method_data,
-            &payment_data.payment_attempt.customer_acceptance,
+            &payment_data.payment_attempt[0].customer_acceptance,
         ) {
             (
                 Some(payment_token),
@@ -423,7 +437,7 @@ impl<F: Clone + Send + Sync> Domain<F, PaymentsConfirmIntentRequest, PaymentConf
                                 payment_methods::vault::retrieve_and_delete_cvc_from_payment_token(
                                     state,
                                     payment_token,
-                                    payment_data.payment_attempt.payment_method_type,
+                                    payment_data.payment_attempt[0].payment_method_type,
                                     merchant_context.get_merchant_key_store().key.get_inner(),
                                 )
                                 .await,
@@ -439,7 +453,7 @@ impl<F: Clone + Send + Sync> Domain<F, PaymentsConfirmIntentRequest, PaymentConf
                         merchant_context,
                         business_profile,
                         payment_token,
-                        &payment_data.payment_attempt.payment_method_type,
+                        &payment_data.payment_attempt[0].payment_method_type,
                     )
                     .await
                     .change_context(errors::ApiErrorResponse::InternalServerError)
@@ -486,8 +500,8 @@ impl<F: Clone + Send + Sync> Domain<F, PaymentsConfirmIntentRequest, PaymentConf
                     api::PaymentMethodCreateData::Card(api::CardDetail::from(card.clone()));
 
                 let req = api::PaymentMethodCreate {
-                    payment_method_type: payment_data.payment_attempt.payment_method_type,
-                    payment_method_subtype: payment_data.payment_attempt.payment_method_subtype,
+                    payment_method_type: payment_data.payment_attempt[0].payment_method_type,
+                    payment_method_subtype: payment_data.payment_attempt[0].payment_method_subtype,
                     metadata: None,
                     customer_id,
                     payment_method_data: pm_create_data,
@@ -566,8 +580,7 @@ impl<F: Clone + Sync> UpdateTracker<F, PaymentConfirmData<F>, PaymentsConfirmInt
         let intent_status = common_enums::IntentStatus::Processing;
         let attempt_status = common_enums::AttemptStatus::Pending;
 
-        let connector = payment_data
-            .payment_attempt
+        let connector = payment_data.payment_attempt[0]
             .connector
             .clone()
             .get_required_value("connector")
@@ -578,8 +591,7 @@ impl<F: Clone + Sync> UpdateTracker<F, PaymentConfirmData<F>, PaymentsConfirmInt
         let merchant_connector_id = match &payment_data.merchant_connector_details {
             Some(_details) => None,
             None => Some(
-                payment_data
-                    .payment_attempt
+                payment_data.payment_attempt[0]
                     .merchant_connector_id
                     .clone()
                     .get_required_value("merchant_connector_id")
@@ -592,19 +604,17 @@ impl<F: Clone + Sync> UpdateTracker<F, PaymentConfirmData<F>, PaymentsConfirmInt
             hyperswitch_domain_models::payments::payment_intent::PaymentIntentUpdate::ConfirmIntent {
                 status: intent_status,
                 updated_by: storage_scheme.to_string(),
-                active_attempt_id: Some(payment_data.payment_attempt.id.clone()),
+                active_attempt_id: Some(payment_data.payment_attempt[0].id.clone()),
             };
 
-        let authentication_type = payment_data.payment_attempt.authentication_type;
+        let authentication_type = payment_data.payment_attempt[0].authentication_type;
 
-        let connector_request_reference_id = payment_data
-            .payment_attempt
+        let connector_request_reference_id = payment_data.payment_attempt[0]
             .connector_request_reference_id
             .clone();
 
         // Updates payment_attempt for cases where authorize flow is not performed.
-        let connector_response_reference_id = payment_data
-            .payment_attempt
+        let connector_response_reference_id = payment_data.payment_attempt[0]
             .connector_response_reference_id
             .clone();
 
@@ -654,7 +664,7 @@ impl<F: Clone + Sync> UpdateTracker<F, PaymentConfirmData<F>, PaymentsConfirmInt
             .update_payment_attempt(
                 key_manager_state,
                 key_store,
-                payment_data.payment_attempt.clone(),
+                payment_data.payment_attempt[0].clone(),
                 payment_attempt_update,
                 storage_scheme,
             )
@@ -662,7 +672,10 @@ impl<F: Clone + Sync> UpdateTracker<F, PaymentConfirmData<F>, PaymentsConfirmInt
             .change_context(errors::ApiErrorResponse::InternalServerError)
             .attach_printable("Unable to update payment attempt")?;
 
-        payment_data.payment_attempt = updated_payment_attempt;
+        payment_data.payment_attempt = vec![
+            updated_payment_attempt,
+            payment_data.payment_attempt[1].clone(),
+        ];
 
         if let Some((customer, updated_customer)) = customer.zip(updated_customer) {
             let customer_id = customer.get_id().clone();

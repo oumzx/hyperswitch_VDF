@@ -959,6 +959,7 @@ impl Default for PaymentAuthorizeType {
     fn default() -> Self {
         let data = types::PaymentsAuthorizeData {
             payment_method_data: types::domain::PaymentMethodData::Card(CCardType::default().0),
+            split_payment_method_data: None,
             amount: 100,
             minor_amount: MinorUnit::new(100),
             order_tax_amount: Some(MinorUnit::zero()),

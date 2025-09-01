@@ -262,12 +262,13 @@ impl<F: Send + Clone + Sync> GetTracker<F, PaymentConfirmData<F>, ProxyPaymentsR
         let payment_data = PaymentConfirmData {
             flow: std::marker::PhantomData,
             payment_intent,
-            payment_attempt,
+            payment_attempt: vec![payment_attempt],
             payment_method_data: Some(PaymentMethodData::MandatePayment),
             payment_address,
             mandate_data: Some(mandate_data_input),
             payment_method: None,
             merchant_connector_details: None,
+            split_payment_method_data: None,
             external_vault_pmd: None,
         };
 
@@ -322,7 +323,7 @@ impl<F: Clone + Send + Sync> Domain<F, ProxyPaymentsRequest, PaymentConfirmData<
             .connector
             .generate_connector_request_reference_id(
                 &payment_data.payment_intent,
-                &payment_data.payment_attempt,
+                &payment_data.payment_attempt[0],
             );
         payment_data.set_connector_request_reference_id(Some(connector_request_reference_id));
         Ok(())
@@ -373,91 +374,7 @@ impl<F: Clone + Sync> UpdateTracker<F, PaymentConfirmData<F>, ProxyPaymentsReque
     where
         F: 'b + Send,
     {
-        let db = &*state.store;
-        let key_manager_state = &state.into();
-
-        let intent_status = common_enums::IntentStatus::Processing;
-        let attempt_status = common_enums::AttemptStatus::Pending;
-
-        let connector = payment_data
-            .payment_attempt
-            .connector
-            .clone()
-            .get_required_value("connector")
-            .change_context(errors::ApiErrorResponse::InternalServerError)
-            .attach_printable("Connector is none when constructing response")?;
-
-        let merchant_connector_id = Some(
-            payment_data
-                .payment_attempt
-                .merchant_connector_id
-                .clone()
-                .get_required_value("merchant_connector_id")
-                .change_context(errors::ApiErrorResponse::InternalServerError)
-                .attach_printable("Merchant connector id is none when constructing response")?,
-        );
-
-        let payment_intent_update =
-            hyperswitch_domain_models::payments::payment_intent::PaymentIntentUpdate::ConfirmIntent {
-                status: intent_status,
-                updated_by: storage_scheme.to_string(),
-                active_attempt_id: Some(payment_data.payment_attempt.id.clone()),
-            };
-
-        let authentication_type = payment_data
-            .payment_intent
-            .authentication_type
-            .unwrap_or_default();
-
-        let connector_request_reference_id = payment_data
-            .payment_attempt
-            .connector_request_reference_id
-            .clone();
-
-        let connector_response_reference_id = payment_data
-            .payment_attempt
-            .connector_response_reference_id
-            .clone();
-
-        let payment_attempt_update = hyperswitch_domain_models::payments::payment_attempt::PaymentAttemptUpdate::ConfirmIntent {
-            status: attempt_status,
-            updated_by: storage_scheme.to_string(),
-            connector,
-            merchant_connector_id,
-            authentication_type,
-            connector_request_reference_id,
-            connector_response_reference_id,
-        };
-
-        let updated_payment_intent = db
-            .update_payment_intent(
-                key_manager_state,
-                payment_data.payment_intent.clone(),
-                payment_intent_update,
-                key_store,
-                storage_scheme,
-            )
-            .await
-            .change_context(errors::ApiErrorResponse::InternalServerError)
-            .attach_printable("Unable to update payment intent")?;
-
-        payment_data.payment_intent = updated_payment_intent;
-
-        let updated_payment_attempt = db
-            .update_payment_attempt(
-                key_manager_state,
-                key_store,
-                payment_data.payment_attempt.clone(),
-                payment_attempt_update,
-                storage_scheme,
-            )
-            .await
-            .change_context(errors::ApiErrorResponse::InternalServerError)
-            .attach_printable("Unable to update payment attempt")?;
-
-        payment_data.payment_attempt = updated_payment_attempt;
-
-        Ok((Box::new(self), payment_data))
+        todo!()
     }
 }
 
@@ -483,45 +400,6 @@ impl<F: Clone> PostUpdateTracker<F, PaymentConfirmData<F>, types::PaymentsAuthor
                 PaymentConfirmData<F>,
             >,
     {
-        use hyperswitch_domain_models::router_data::TrackerPostUpdateObjects;
-
-        let db = &*state.store;
-        let key_manager_state = &state.into();
-
-        let response_router_data = response;
-
-        let payment_intent_update =
-            response_router_data.get_payment_intent_update(&payment_data, storage_scheme);
-        let payment_attempt_update =
-            response_router_data.get_payment_attempt_update(&payment_data, storage_scheme);
-
-        let updated_payment_intent = db
-            .update_payment_intent(
-                key_manager_state,
-                payment_data.payment_intent,
-                payment_intent_update,
-                key_store,
-                storage_scheme,
-            )
-            .await
-            .change_context(errors::ApiErrorResponse::InternalServerError)
-            .attach_printable("Unable to update payment intent")?;
-
-        let updated_payment_attempt = db
-            .update_payment_attempt(
-                key_manager_state,
-                key_store,
-                payment_data.payment_attempt,
-                payment_attempt_update,
-                storage_scheme,
-            )
-            .await
-            .change_context(errors::ApiErrorResponse::InternalServerError)
-            .attach_printable("Unable to update payment attempt")?;
-
-        payment_data.payment_intent = updated_payment_intent;
-        payment_data.payment_attempt = updated_payment_attempt;
-
-        Ok(payment_data)
+        todo!()
     }
 }

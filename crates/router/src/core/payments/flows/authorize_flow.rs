@@ -78,8 +78,7 @@ impl
         merchant_connector_account: &helpers::MerchantConnectorAccountType,
         connector: &api::ConnectorData,
     ) -> RouterResult<Option<types::MerchantRecipientData>> {
-        let is_open_banking = &self
-            .payment_attempt
+        let is_open_banking = &self.payment_attempt[0]
             .get_payment_method()
             .get_required_value("PaymentMethod")?
             .eq(&enums::PaymentMethod::OpenBanking);
@@ -211,31 +210,68 @@ impl Feature<api::Authorize, types::PaymentsAuthorizeData> for types::PaymentsAu
             auth_router_data.integrity_check = integrity_result;
             metrics::PAYMENT_COUNT.add(1, &[]); // Move outside of the if block
 
-            match auth_router_data.response.clone() {
-                Err(_) => Ok(auth_router_data),
-                Ok(authorize_response) => {
-                    // Check if the Capture API should be called based on the connector and other parameters
-                    if super::should_initiate_capture_flow(
-                        &connector.connector_name,
-                        self.request.customer_acceptance,
-                        self.request.capture_method,
-                        self.request.setup_future_usage,
-                        auth_router_data.status,
-                    ) {
-                        auth_router_data = Box::pin(process_capture_flow(
-                            auth_router_data,
-                            authorize_response,
-                            state,
-                            connector,
-                            call_connector_action.clone(),
-                            business_profile,
-                            header_payload,
-                        ))
-                        .await?;
-                    }
-                    Ok(auth_router_data)
-                }
-            }
+            let return_router_data = auth_router_data.clone();
+
+            auth_router_data.request.payment_method_data =
+                hyperswitch_domain_models::payment_method_data::PaymentMethodData::from(
+                    auth_router_data
+                        .request
+                        .split_payment_method_data
+                        .clone()
+                        .unwrap()
+                        .payment_method_data,
+                );
+            let connector_integration: services::BoxedPaymentConnectorIntegrationInterface<
+                api::Authorize,
+                types::PaymentsAuthorizeData,
+                types::PaymentsResponseData,
+            > = connector.connector.get_connector_integration();
+
+            let (connector_request, _) = auth_router_data
+                .build_flow_specific_connector_request(
+                    state,
+                    connector,
+                    call_connector_action.clone(),
+                )
+                .await?;
+
+            let mut split_router_data = services::execute_connector_processing_step(
+                state,
+                connector_integration,
+                &self,
+                call_connector_action.clone(),
+                connector_request,
+                return_raw_connector_response,
+            )
+            .await
+            .to_payment_failed_response()?;
+
+            Ok(return_router_data)
+            // match auth_router_data.response.clone() {
+            //     Err(_) => Ok(auth_router_data),
+            //     Ok(authorize_response) => {
+            //         // Check if the Capture API should be called based on the connector and other parameters
+            //         if super::should_initiate_capture_flow(
+            //             &connector.connector_name,
+            //             self.request.customer_acceptance,
+            //             self.request.capture_method,
+            //             self.request.setup_future_usage,
+            //             auth_router_data.status,
+            //         ) {
+            //             auth_router_data = Box::pin(process_capture_flow(
+            //                 auth_router_data,
+            //                 authorize_response,
+            //                 state,
+            //                 connector,
+            //                 call_connector_action.clone(),
+            //                 business_profile,
+            //                 header_payload,
+            //             ))
+            //             .await?;
+            //         }
+            //         Ok(auth_router_data)
+            //     }
+            // }
         } else {
             Ok(self.clone())
         }

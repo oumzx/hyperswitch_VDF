@@ -688,8 +688,7 @@ impl
                             connector_metadata: connector_metadata.clone().map(Secret::new),
                             connector_token_details: response_router_data
                                 .get_updated_connector_token_details(
-                                    payment_data
-                                        .payment_attempt
+                                    payment_data.payment_attempt[0]
                                         .connector_token_details
                                         .as_ref()
                                         .and_then(|token_details| {
@@ -814,7 +813,9 @@ impl
             // This is in cases where the capture method will be `manual` or `manual_multiple`
             // We do not need to handle the case where amount_to_capture is provided here as it cannot be passed in authroize flow
             common_enums::IntentStatus::RequiresCapture => {
-                let total_amount = payment_data.payment_attempt.amount_details.get_net_amount();
+                let total_amount = payment_data.payment_attempt[0]
+                    .amount_details
+                    .get_net_amount();
                 Some(total_amount)
             }
             // Invalid statues for this flow, after doing authorization this state is invalid
@@ -833,7 +834,9 @@ impl
             // If the status is succeeded then we have captured the whole amount
             // we need not check for `amount_to_capture` here because passing `amount_to_capture` when authorizing is not supported
             common_enums::IntentStatus::Succeeded | common_enums::IntentStatus::Conflicted => {
-                let total_amount = payment_data.payment_attempt.amount_details.get_net_amount();
+                let total_amount = payment_data.payment_attempt[0]
+                    .amount_details
+                    .get_net_amount();
                 Some(total_amount)
             }
             // No amount is captured
@@ -1404,8 +1407,7 @@ impl
                             connector_metadata: connector_metadata.clone().map(Secret::new),
                             connector_token_details: response_router_data
                                 .get_updated_connector_token_details(
-                                    payment_data
-                                        .payment_attempt
+                                    payment_data.payment_attempt[0]
                                         .connector_token_details
                                         .as_ref()
                                         .and_then(|token_details| {
@@ -1523,7 +1525,9 @@ impl
             | common_enums::IntentStatus::RequiresConfirmation => None,
             common_enums::IntentStatus::RequiresCapture
             | common_enums::IntentStatus::PartiallyAuthorizedAndRequiresCapture => {
-                let total_amount = payment_data.payment_attempt.amount_details.get_net_amount();
+                let total_amount = payment_data.payment_attempt[0]
+                    .amount_details
+                    .get_net_amount();
                 Some(total_amount)
             }
             common_enums::IntentStatus::PartiallyCaptured
@@ -1539,7 +1543,9 @@ impl
         let intent_status = common_enums::IntentStatus::from(self.status);
         match intent_status {
             common_enums::IntentStatus::Succeeded | common_enums::IntentStatus::Conflicted => {
-                let total_amount = payment_data.payment_attempt.amount_details.get_net_amount();
+                let total_amount = payment_data.payment_attempt[0]
+                    .amount_details
+                    .get_net_amount();
                 Some(total_amount)
             }
             common_enums::IntentStatus::Cancelled
@@ -1632,8 +1638,7 @@ impl
                             connector_metadata: connector_metadata.clone().map(Secret::new),
                             connector_token_details: response_router_data
                                 .get_updated_connector_token_details(
-                                    payment_data
-                                        .payment_attempt
+                                    payment_data.payment_attempt[0]
                                         .connector_token_details
                                         .as_ref()
                                         .and_then(|token_details| {
@@ -1750,7 +1755,9 @@ impl
             // We do not need to handle the case where amount_to_capture is provided here as it cannot be passed in authroize flow
             common_enums::IntentStatus::RequiresCapture
             | common_enums::IntentStatus::PartiallyAuthorizedAndRequiresCapture => {
-                let total_amount = payment_data.payment_attempt.amount_details.get_net_amount();
+                let total_amount = payment_data.payment_attempt[0]
+                    .amount_details
+                    .get_net_amount();
                 Some(total_amount)
             }
             // Invalid statues for this flow, after doing authorization this state is invalid
@@ -1769,7 +1776,9 @@ impl
             // If the status is succeeded then we have captured the whole amount
             // we need not check for `amount_to_capture` here because passing `amount_to_capture` when authorizing is not supported
             common_enums::IntentStatus::Succeeded | common_enums::IntentStatus::Conflicted => {
-                let total_amount = payment_data.payment_attempt.amount_details.get_net_amount();
+                let total_amount = payment_data.payment_attempt[0]
+                    .amount_details
+                    .get_net_amount();
                 Some(total_amount)
             }
             // No amount is captured

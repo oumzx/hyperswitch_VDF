@@ -291,10 +291,11 @@ impl<F: Send + Clone + Sync> GetTracker<F, PaymentConfirmData<F>, ExternalVaultP
         let payment_data = PaymentConfirmData {
             flow: std::marker::PhantomData,
             payment_intent,
-            payment_attempt,
+            payment_attempt: vec![payment_attempt],
             payment_method_data: None, // TODO: Review for external vault
             payment_address,
             mandate_data: Some(mandate_data_input),
+            split_payment_method_data: None,
             payment_method: None,
             merchant_connector_details: None,
             external_vault_pmd: payment_method_data,
@@ -348,63 +349,64 @@ impl<F: Clone + Send + Sync> Domain<F, ExternalVaultProxyPaymentsRequest, Paymen
         business_profile: &domain::Profile,
         payment_data: &mut PaymentConfirmData<F>,
     ) -> CustomResult<(), errors::ApiErrorResponse> {
-        match (
-            payment_data.payment_intent.customer_id.clone(),
-            payment_data.external_vault_pmd.clone(),
-            payment_data.payment_attempt.customer_acceptance.clone(),
-            payment_data.payment_attempt.payment_token.clone(),
-        ) {
-            (Some(customer_id), Some(hyperswitch_domain_models::payment_method_data::ExternalVaultPaymentMethodData::Card(card_details)), Some(_), None) => {
+        todo!()
+        //     match (
+        //         payment_data.payment_intent.customer_id.clone(),
+        //         payment_data.external_vault_pmd.clone(),
+        //         payment_data.payment_attempt.customer_acceptance.clone(),
+        //         payment_data.payment_attempt.payment_token.clone(),
+        //     ) {
+        //         (Some(customer_id), Some(hyperswitch_domain_models::payment_method_data::ExternalVaultPaymentMethodData::Card(card_details)), Some(_), None) => {
 
-                let payment_method_data =
-                    api::PaymentMethodCreateData::ProxyCard(api::ProxyCardDetails::from(*card_details));
-                let billing = payment_data
-                    .payment_address
-                    .get_payment_method_billing()
-                    .cloned()
-                    .map(From::from);
+        //             let payment_method_data =
+        //                 api::PaymentMethodCreateData::ProxyCard(api::ProxyCardDetails::from(*card_details));
+        //             let billing = payment_data
+        //                 .payment_address
+        //                 .get_payment_method_billing()
+        //                 .cloned()
+        //                 .map(From::from);
 
-                let req = api::PaymentMethodCreate {
-                    payment_method_type: payment_data.payment_attempt.payment_method_type,
-                    payment_method_subtype: payment_data.payment_attempt.payment_method_subtype,
-                    metadata: None,
-                    customer_id,
-                    payment_method_data,
-                    billing,
-                    psp_tokenization: None,
-                    network_tokenization: None,
-                };
+        //             let req = api::PaymentMethodCreate {
+        //                 payment_method_type: payment_data.payment_attempt.payment_method_type,
+        //                 payment_method_subtype: payment_data.payment_attempt.payment_method_subtype,
+        //                 metadata: None,
+        //                 customer_id,
+        //                 payment_method_data,
+        //                 billing,
+        //                 psp_tokenization: None,
+        //                 network_tokenization: None,
+        //             };
 
-                let (_pm_response, payment_method) = Box::pin(payment_methods::create_payment_method_core(
-                    state,
-                    &state.get_req_state(),
-                    req,
-                    merchant_context,
-                    business_profile,
-                ))
-                .await?;
+        //             let (_pm_response, payment_method) = Box::pin(payment_methods::create_payment_method_core(
+        //                 state,
+        //                 &state.get_req_state(),
+        //                 req,
+        //                 merchant_context,
+        //                 business_profile,
+        //             ))
+        //             .await?;
 
-                payment_data.payment_method = Some(payment_method);
-            }
-            (_, Some(hyperswitch_domain_models::payment_method_data::ExternalVaultPaymentMethodData::VaultToken(vault_token)), None, Some(payment_token)) => {
-                payment_data.external_vault_pmd = Some(payment_methods::get_external_vault_token(
-                    state,
-                    merchant_context.get_merchant_key_store(),
-                    merchant_context.get_merchant_account().storage_scheme,
-                    payment_token.clone(),
-                    vault_token.clone(),
-                    &payment_data.payment_attempt.payment_method_type
-                )
-                .await?);
-            }
-            _ => {
-                router_env::logger::debug!(
-                    "No payment method to create or fetch for external vault proxy payment intent"
-                );
-            }
-        }
+        //             payment_data.payment_method = Some(payment_method);
+        //         }
+        //         (_, Some(hyperswitch_domain_models::payment_method_data::ExternalVaultPaymentMethodData::VaultToken(vault_token)), None, Some(payment_token)) => {
+        //             payment_data.external_vault_pmd = Some(payment_methods::get_external_vault_token(
+        //                 state,
+        //                 merchant_context.get_merchant_key_store(),
+        //                 merchant_context.get_merchant_account().storage_scheme,
+        //                 payment_token.clone(),
+        //                 vault_token.clone(),
+        //                 &payment_data.payment_attempt.payment_method_type
+        //             )
+        //             .await?);
+        //         }
+        //         _ => {
+        //             router_env::logger::debug!(
+        //                 "No payment method to create or fetch for external vault proxy payment intent"
+        //             );
+        //         }
+        //     }
 
-        Ok(())
+        //     Ok(())
     }
 
     #[cfg(feature = "v2")]
@@ -414,20 +416,7 @@ impl<F: Clone + Send + Sync> Domain<F, ExternalVaultProxyPaymentsRequest, Paymen
         merchant_context: &domain::MerchantContext,
         payment_data: &mut PaymentConfirmData<F>,
     ) {
-        if let (true, Some(payment_method_id)) = (
-            payment_data.payment_attempt.customer_acceptance.is_some(),
-            payment_data.payment_attempt.payment_method_id.clone(),
-        ) {
-            payment_methods::update_payment_method_status_internal(
-                state,
-                merchant_context.get_merchant_key_store(),
-                merchant_context.get_merchant_account().storage_scheme,
-                common_enums::PaymentMethodStatus::Active,
-                &payment_method_id,
-            )
-            .await
-            .map_err(|err| router_env::logger::error!(err=?err));
-        };
+        todo!()
     }
 
     #[instrument(skip_all)]
@@ -443,7 +432,7 @@ impl<F: Clone + Send + Sync> Domain<F, ExternalVaultProxyPaymentsRequest, Paymen
             .connector
             .generate_connector_request_reference_id(
                 &payment_data.payment_intent,
-                &payment_data.payment_attempt,
+                &payment_data.payment_attempt[0],
             );
         payment_data.set_connector_request_reference_id(Some(connector_request_reference_id));
         Ok(())
@@ -487,91 +476,92 @@ impl<F: Clone + Sync> UpdateTracker<F, PaymentConfirmData<F>, ExternalVaultProxy
     where
         F: 'b + Send,
     {
-        let db = &*state.store;
-        let key_manager_state = &state.into();
+        todo!()
+        //     let db = &*state.store;
+        //     let key_manager_state = &state.into();
 
-        let intent_status = common_enums::IntentStatus::Processing;
-        let attempt_status = common_enums::AttemptStatus::Pending;
+        //     let intent_status = common_enums::IntentStatus::Processing;
+        //     let attempt_status = common_enums::AttemptStatus::Pending;
 
-        let connector = payment_data
-            .payment_attempt
-            .connector
-            .clone()
-            .get_required_value("connector")
-            .change_context(errors::ApiErrorResponse::InternalServerError)
-            .attach_printable("Connector is none when constructing response")?;
+        //     let connector = payment_data
+        //         .payment_attempt
+        //         .connector
+        //         .clone()
+        //         .get_required_value("connector")
+        //         .change_context(errors::ApiErrorResponse::InternalServerError)
+        //         .attach_printable("Connector is none when constructing response")?;
 
-        let merchant_connector_id = Some(
-            payment_data
-                .payment_attempt
-                .merchant_connector_id
-                .clone()
-                .get_required_value("merchant_connector_id")
-                .change_context(errors::ApiErrorResponse::InternalServerError)
-                .attach_printable("Merchant connector id is none when constructing response")?,
-        );
+        //     let merchant_connector_id = Some(
+        //         payment_data
+        //             .payment_attempt
+        //             .merchant_connector_id
+        //             .clone()
+        //             .get_required_value("merchant_connector_id")
+        //             .change_context(errors::ApiErrorResponse::InternalServerError)
+        //             .attach_printable("Merchant connector id is none when constructing response")?,
+        //     );
 
-        let payment_intent_update =
-            hyperswitch_domain_models::payments::payment_intent::PaymentIntentUpdate::ConfirmIntent {
-                status: intent_status,
-                updated_by: storage_scheme.to_string(),
-                active_attempt_id: Some(payment_data.payment_attempt.id.clone()),
-            };
+        //     let payment_intent_update =
+        //         hyperswitch_domain_models::payments::payment_intent::PaymentIntentUpdate::ConfirmIntent {
+        //             status: intent_status,
+        //             updated_by: storage_scheme.to_string(),
+        //             active_attempt_id: Some(payment_data.payment_attempt.id.clone()),
+        //         };
 
-        let authentication_type = payment_data
-            .payment_intent
-            .authentication_type
-            .unwrap_or_default();
+        //     let authentication_type = payment_data
+        //         .payment_intent
+        //         .authentication_type
+        //         .unwrap_or_default();
 
-        let connector_request_reference_id = payment_data
-            .payment_attempt
-            .connector_request_reference_id
-            .clone();
+        //     let connector_request_reference_id = payment_data
+        //         .payment_attempt
+        //         .connector_request_reference_id
+        //         .clone();
 
-        let connector_response_reference_id = payment_data
-            .payment_attempt
-            .connector_response_reference_id
-            .clone();
+        //     let connector_response_reference_id = payment_data
+        //         .payment_attempt
+        //         .connector_response_reference_id
+        //         .clone();
 
-        let payment_attempt_update = hyperswitch_domain_models::payments::payment_attempt::PaymentAttemptUpdate::ConfirmIntent {
-            status: attempt_status,
-            updated_by: storage_scheme.to_string(),
-            connector,
-            merchant_connector_id,
-            authentication_type,
-            connector_request_reference_id,
-            connector_response_reference_id,
-        };
+        //     let payment_attempt_update = hyperswitch_domain_models::payments::payment_attempt::PaymentAttemptUpdate::ConfirmIntent {
+        //         status: attempt_status,
+        //         updated_by: storage_scheme.to_string(),
+        //         connector,
+        //         merchant_connector_id,
+        //         authentication_type,
+        //         connector_request_reference_id,
+        //         connector_response_reference_id,
+        //     };
 
-        let updated_payment_intent = db
-            .update_payment_intent(
-                key_manager_state,
-                payment_data.payment_intent.clone(),
-                payment_intent_update,
-                key_store,
-                storage_scheme,
-            )
-            .await
-            .change_context(errors::ApiErrorResponse::InternalServerError)
-            .attach_printable("Unable to update payment intent")?;
+        //     let updated_payment_intent = db
+        //         .update_payment_intent(
+        //             key_manager_state,
+        //             payment_data.payment_intent.clone(),
+        //             payment_intent_update,
+        //             key_store,
+        //             storage_scheme,
+        //         )
+        //         .await
+        //         .change_context(errors::ApiErrorResponse::InternalServerError)
+        //         .attach_printable("Unable to update payment intent")?;
 
-        payment_data.payment_intent = updated_payment_intent;
+        //     payment_data.payment_intent = updated_payment_intent;
 
-        let updated_payment_attempt = db
-            .update_payment_attempt(
-                key_manager_state,
-                key_store,
-                payment_data.payment_attempt.clone(),
-                payment_attempt_update,
-                storage_scheme,
-            )
-            .await
-            .change_context(errors::ApiErrorResponse::InternalServerError)
-            .attach_printable("Unable to update payment attempt")?;
+        //     let updated_payment_attempt = db
+        //         .update_payment_attempt(
+        //             key_manager_state,
+        //             key_store,
+        //             payment_data.payment_attempt.clone(),
+        //             payment_attempt_update,
+        //             storage_scheme,
+        //         )
+        //         .await
+        //         .change_context(errors::ApiErrorResponse::InternalServerError)
+        //         .attach_printable("Unable to update payment attempt")?;
 
-        payment_data.payment_attempt = updated_payment_attempt;
+        //     payment_data.payment_attempt = updated_payment_attempt;
 
-        Ok((Box::new(self), payment_data))
+        //     Ok((Box::new(self), payment_data))
     }
 }
 
@@ -597,47 +587,6 @@ impl<F: Clone> PostUpdateTracker<F, PaymentConfirmData<F>, types::PaymentsAuthor
                 PaymentConfirmData<F>,
             >,
     {
-        use hyperswitch_domain_models::router_data::TrackerPostUpdateObjects;
-
-        let db = &*state.store;
-        let key_manager_state = &state.into();
-
-        let response_router_data = response;
-
-        let payment_intent_update =
-            response_router_data.get_payment_intent_update(&payment_data, storage_scheme);
-        let payment_attempt_update =
-            response_router_data.get_payment_attempt_update(&payment_data, storage_scheme);
-
-        let updated_payment_intent = db
-            .update_payment_intent(
-                key_manager_state,
-                payment_data.payment_intent,
-                payment_intent_update,
-                key_store,
-                storage_scheme,
-            )
-            .await
-            .change_context(errors::ApiErrorResponse::InternalServerError)
-            .attach_printable("Unable to update payment intent")?;
-
-        let updated_payment_attempt = db
-            .update_payment_attempt(
-                key_manager_state,
-                key_store,
-                payment_data.payment_attempt,
-                payment_attempt_update,
-                storage_scheme,
-            )
-            .await
-            .change_context(errors::ApiErrorResponse::InternalServerError)
-            .attach_printable("Unable to update payment attempt")?;
-
-        payment_data.payment_intent = updated_payment_intent;
-        payment_data.payment_attempt = updated_payment_attempt;
-
-        // TODO: Add external vault specific post-update logic
-
-        Ok(payment_data)
+        todo!()
     }
 }

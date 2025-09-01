@@ -6224,6 +6224,7 @@ pub(crate) fn convert_setup_mandate_router_data_to_authorize_router_data(
     PaymentsAuthorizeData {
         currency: data.request.currency,
         payment_method_data: data.request.payment_method_data.clone(),
+        split_payment_method_data: None,
         confirm: data.request.confirm,
         statement_descriptor_suffix: data.request.statement_descriptor_suffix.clone(),
         mandate_id: data.request.mandate_id.clone(),
