@@ -1865,29 +1865,30 @@ where
         let payment_intent = &self.payment_intent;
         let payment_attempt = &self.payment_attempt;
 
-        let amount = api_models::payments::PaymentAmountDetailsResponse::foreign_from((
-            &payment_intent.amount_details,
-            &payment_attempt.amount_details,
-        ));
+        todo!()
+        // let amount = api_models::payments::PaymentAmountDetailsResponse::foreign_from((
+        //     &payment_intent.amount_details,
+        //     &payment_attempt.amount_details,
+        // ));
 
-        let response = api_models::payments::PaymentsCaptureResponse {
-            id: payment_intent.id.clone(),
-            amount,
-            status: payment_intent.status,
-        };
+        // let response = api_models::payments::PaymentsCaptureResponse {
+        //     id: payment_intent.id.clone(),
+        //     amount,
+        //     status: payment_intent.status,
+        // };
 
-        let headers = connector_http_status_code
-            .map(|status_code| {
-                vec![(
-                    X_CONNECTOR_HTTP_STATUS_CODE.to_string(),
-                    Maskable::new_normal(status_code.to_string()),
-                )]
-            })
-            .unwrap_or_default();
+        // let headers = connector_http_status_code
+        //     .map(|status_code| {
+        //         vec![(
+        //             X_CONNECTOR_HTTP_STATUS_CODE.to_string(),
+        //             Maskable::new_normal(status_code.to_string()),
+        //         )]
+        //     })
+        //     .unwrap_or_default();
 
-        Ok(services::ApplicationResponse::JsonWithHeaders((
-            response, headers,
-        )))
+        // Ok(services::ApplicationResponse::JsonWithHeaders((
+        //     response, headers,
+        // )))
     }
 }
 
@@ -2200,7 +2201,11 @@ where
 
         let amount = api_models::payments::PaymentAmountDetailsResponse::foreign_from((
             &payment_intent.amount_details,
-            &payment_attempt[0].amount_details,
+            &payment_attempt
+                .clone()
+                .into_iter()
+                .map(|val| val.amount_details)
+                .collect::<Vec<_>>(),
         ));
 
         let connector = payment_attempt[0]
@@ -5368,9 +5373,40 @@ impl
             surcharge_calculation: intent_amount_details.skip_surcharge_calculation,
             surcharge_amount: attempt_amount_details.get_surcharge_amount(),
             tax_on_surcharge: attempt_amount_details.get_tax_on_surcharge(),
-            net_amount: attempt_amount_details.get_net_amount(),
+            net_amount: intent_amount_details.order_amount,
             amount_to_capture: attempt_amount_details.get_amount_to_capture(),
-            amount_capturable: attempt_amount_details.get_amount_capturable(),
+            amount_capturable: intent_amount_details.order_amount,
+            amount_captured: intent_amount_details.amount_captured,
+        }
+    }
+}
+
+#[cfg(feature = "v2")]
+impl
+    ForeignFrom<(
+        &hyperswitch_domain_models::payments::AmountDetails,
+        &Vec<hyperswitch_domain_models::payments::payment_attempt::AttemptAmountDetails>,
+    )> for api_models::payments::PaymentAmountDetailsResponse
+{
+    fn foreign_from(
+        (intent_amount_details, attempt_amount_details): (
+            &hyperswitch_domain_models::payments::AmountDetails,
+            &Vec<hyperswitch_domain_models::payments::payment_attempt::AttemptAmountDetails>,
+        ),
+    ) -> Self {
+        Self {
+            order_amount: intent_amount_details.order_amount,
+            currency: intent_amount_details.currency,
+            shipping_cost: attempt_amount_details[0].get_shipping_cost(),
+            order_tax_amount: attempt_amount_details[0].get_order_tax_amount(),
+            external_tax_calculation: intent_amount_details.skip_external_tax_calculation,
+            surcharge_calculation: intent_amount_details.skip_surcharge_calculation,
+            surcharge_amount: attempt_amount_details[0].get_surcharge_amount(),
+            tax_on_surcharge: attempt_amount_details[0].get_tax_on_surcharge(),
+            net_amount: attempt_amount_details[0].get_net_amount()
+                + attempt_amount_details[1].get_net_amount(),
+            amount_to_capture: attempt_amount_details[0].get_amount_to_capture(),
+            amount_capturable: intent_amount_details.order_amount,
             amount_captured: intent_amount_details.amount_captured,
         }
     }

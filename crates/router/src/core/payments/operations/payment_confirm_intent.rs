@@ -227,6 +227,12 @@ impl<F: Send + Clone + Sync> GetTracker<F, PaymentConfirmData<F>, PaymentsConfir
 
         payment_attempt_domain_models[1].status = common_enums::AttemptStatus::Authorized;
         payment_attempt_domain_models[1].connector = Some("adyen".to_string());
+        payment_attempt_domain_models[1].connector_response_reference_id = Some(
+            payment_attempt_domain_models[1]
+                .id
+                .get_string_repr()
+                .to_string(),
+        );
         let mut payment_attempt_2: hyperswitch_domain_models::payments::payment_attempt::PaymentAttempt =
             db.insert_payment_attempt(
                 key_manager_state,

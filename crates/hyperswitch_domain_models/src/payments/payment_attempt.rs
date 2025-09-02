@@ -559,6 +559,7 @@ impl PaymentAttempt {
             attempt_amount_details_1.net_amount =
                 attempt_amount_details_1.net_amount - data.split_amount.into();
             attempt_amount_details_2.net_amount = data.split_amount.into();
+            attempt_amount_details_2.amount_capturable = data.split_amount.into();
         }
 
         let now = common_utils::date_time::now();

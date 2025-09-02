@@ -221,6 +221,14 @@ impl Feature<api::Authorize, types::PaymentsAuthorizeData> for types::PaymentsAu
                         .unwrap()
                         .payment_method_data,
                 );
+
+            auth_router_data.request.minor_amount = auth_router_data
+                .request
+                .split_payment_method_data
+                .clone()
+                .unwrap()
+                .split_amount
+                .into();
             let connector_integration: services::BoxedPaymentConnectorIntegrationInterface<
                 api::Authorize,
                 types::PaymentsAuthorizeData,
