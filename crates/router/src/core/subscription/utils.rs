@@ -9,7 +9,11 @@ use hyperswitch_domain_models::{
 use router_env::instrument;
 
 use crate::{
-    consts, core::customers::create_customer, db::{errors, StorageInterface}, routes::SessionState, types::{api::CustomerResponse, transformers::ForeignInto}
+    consts,
+    core::customers::create_customer,
+    db::{errors, StorageInterface},
+    routes::SessionState,
+    types::{api::CustomerResponse, transformers::ForeignInto},
 };
 
 pub async fn get_or_create_customer(

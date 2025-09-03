@@ -34,7 +34,8 @@ use hyperswitch_domain_models::{
         SetupMandateRequestData,
     },
     router_response_types::{
-        subscriptions::GetSubscriptionPlansResponse, ConnectorInfo, PaymentsResponseData, RefundsResponseData
+        subscriptions::GetSubscriptionPlansResponse, ConnectorInfo, PaymentsResponseData,
+        RefundsResponseData,
     },
     types::{
         GetSubscriptionPlansRouterData, PaymentsAuthorizeRouterData, PaymentsCaptureRouterData,
