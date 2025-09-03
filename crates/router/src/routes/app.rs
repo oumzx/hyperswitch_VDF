@@ -1165,7 +1165,7 @@ impl Subscription {
     pub fn server(state: AppState) -> Scope {
         web::scope("/subscription")
             .app_data(web::Data::new(state.clone()))
-            .service(web::resource("/plans").route(
+            .service(web::resource("/plans/{client_secret}").route(
                 web::get().to(subscription::get_subscription_plans)))
             .service(web::resource("/create").route(
                 web::post().to(|state, req, payload| {

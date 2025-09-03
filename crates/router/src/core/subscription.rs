@@ -3,6 +3,7 @@ use api_models::subscription::{
     self as subscription_types, CreateSubscriptionResponse, Subscription, SubscriptionStatus,
     SUBSCRIPTION_ID_PREFIX,
 };
+use crate::types::domain;
 use common_utils::generate_id_with_default_len;
 use diesel_models::subscription::SubscriptionNew;
 use error_stack::ResultExt;
@@ -77,5 +78,35 @@ pub async fn create_subscription(
         .to_not_found_response(errors::ApiErrorResponse::ResourceIdNotFound)
         .attach_printable("subscriptions: unable to insert subscription entry to database")?;
 
+    Ok(ApplicationResponse::Json(response))
+}
+
+
+pub async fn get_subscription_plans(
+    state: SessionState,
+    merchant_context: domain::MerchantContext,
+    authentication_profile_id: Option<common_utils::id_type::ProfileId>,
+    client_secret: String,
+) -> RouterResponse<Vec<subscription_types::GetPlansResponse>> {
+    let db = state.store.as_ref();
+    // let key_manager_state = &(&state).into();
+    let sub_vec = client_secret.split("_secret").collect::<Vec<&str>>();
+    let subscription_id = sub_vec
+        .first()
+        .ok_or(errors::ApiErrorResponse::MissingRequiredField {
+            field_name: "client_secret",
+        })?;
+
+    // let subscription = db
+    //     .subscription(
+    //         &(state.into()),
+    //         merchant_context.get_merchant_key_store(),
+    //         pm_id,
+    //         merchant_context.get_merchant_account().storage_scheme,
+    //     )
+    //     .await
+    //     .change_context(errors::ApiErrorResponse::PaymentMethodNotFound)
+    //     .attach_printable("Unable to find payment method")?;
+    let response = Vec::new();
     Ok(ApplicationResponse::Json(response))
 }
