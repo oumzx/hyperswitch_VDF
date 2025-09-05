@@ -6723,3 +6723,51 @@ key1 = "Username"
 [paysafe]
 [paysafe.connector_auth.HeaderKey]
 api_key = "API Key"
+
+[wave]
+[wave.connector_auth.HeaderKey]
+api_key = "API Key"
+
+[wave]
+[wave.connector_auth.HeaderKey]
+api_key = "API Key"
+
+[wave]
+[wave.connector_auth.HeaderKey]
+api_key = "API Key"
+
+[wave]
+[wave.connector_auth.HeaderKey]
+api_key = "API Key"
+
+[wave]
+[wave.connector_auth.HeaderKey]
+api_key = "API Key"
+
+[wave]
+[wave.connector_auth.HeaderKey]
+api_key = "API Key"
+
+[wave]
+[wave.connector_auth.HeaderKey]
+api_key = "API Key"
+
+[wave]
+[wave.connector_auth.HeaderKey]
+api_key = "API Key"
+
+[wave]
+[wave.connector_auth.HeaderKey]
+api_key = "API Key"
+
+[wave]
+[wave.connector_auth.HeaderKey]
+api_key = "API Key"
+
+[wave]
+[wave.connector_auth.HeaderKey]
+api_key = "API Key"
+
+[wave]
+[wave.connector_auth.HeaderKey]
+api_key = "API Key"
