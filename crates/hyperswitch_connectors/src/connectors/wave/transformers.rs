@@ -1,217 +1,79 @@
-use common_enums::enums;
-use common_utils::types::StringMinorUnit;
-use hyperswitch_domain_models::{
-    payment_method_data::PaymentMethodData,
-    router_data::{ConnectorAuthType, RouterData},
-    router_flow_types::refunds::{Execute, RSync},
-    router_request_types::ResponseId,
-    router_response_types::{PaymentsResponseData, RefundsResponseData},
-    types::{PaymentsAuthorizeRouterData, RefundsRouterData},
-};
-use hyperswitch_interfaces::errors;
-use masking::Secret;
-use serde::{Deserialize, Serialize};
+// // crates/hyperswitch_connectors/src/connectors/wave/transformers.rs
 
-use crate::types::{RefundsResponseRouterData, ResponseRouterData};
+// use serde::{Deserialize, Serialize};
+// use masking::Secret;
 
-//TODO: Fill the struct with respective fields
-pub struct WaveRouterData<T> {
-    pub amount: StringMinorUnit, // The type of amount that a connector accepts, for example, String, i64, f64, etc.
-    pub router_data: T,
-}
+// use hyperswitch_domain_models::{
+//     router_data::ConnectorAuthType,
+//     types::PaymentsAuthorizeRouterData,
+// };
+// use error_stack::{ResultExt, Report};
 
-impl<T> From<(StringMinorUnit, T)> for WaveRouterData<T> {
-    fn from((amount, item): (StringMinorUnit, T)) -> Self {
-        //Todo :  use utils to convert the amount to the type of amount that a connector accepts
-        Self {
-            amount,
-            router_data: item,
-        }
-    }
-}
+// use hyperswitch_interfaces::errors::ConnectorError;
 
-//TODO: Fill the struct with respective fields
-#[derive(Default, Debug, Serialize, PartialEq)]
-pub struct WavePaymentsRequest {
-    amount: StringMinorUnit,
-    card: WaveCard,
-}
+// #[derive(Debug, Clone)]
+// pub struct WaveAuthType {
+//     pub api_key: Secret<String>,
+// }
 
-#[derive(Default, Debug, Serialize, Eq, PartialEq)]
-pub struct WaveCard {
-    number: cards::CardNumber,
-    expiry_month: Secret<String>,
-    expiry_year: Secret<String>,
-    cvc: Secret<String>,
-    complete: bool,
-}
+// impl TryFrom<&ConnectorAuthType> for WaveAuthType {
+//     type Error = Report<ConnectorError>;
+//     fn try_from(auth: &ConnectorAuthType) -> Result<Self, Self::Error> {
+//         // Adapte selon la forme d’auth attendue pour Wave dans ton projet.
+//         // Ici, on accepte une API Key simple stockée dans auth.api_key
+//         let key = auth
+//             .get_api_key() // si tu n'as pas cette méthode, remplace par le bon accès
+//             .change_context(ConnectorError::FailedToObtainAuthType)?;
+//         Ok(Self { api_key: Secret::new(key) })
+//     }
+// }
 
-impl TryFrom<&WaveRouterData<&PaymentsAuthorizeRouterData>> for WavePaymentsRequest {
-    type Error = error_stack::Report<errors::ConnectorError>;
-    fn try_from(item: &WaveRouterData<&PaymentsAuthorizeRouterData>) -> Result<Self, Self::Error> {
-        match item.router_data.request.payment_method_data.clone() {
-            PaymentMethodData::Card(_) => Err(errors::ConnectorError::NotImplemented(
-                "Card payment method not implemented".to_string(),
-            )
-            .into()),
-            _ => Err(errors::ConnectorError::NotImplemented("Payment method".to_string()).into()),
-        }
-    }
-}
+// #[derive(Debug, Clone, Serialize, Deserialize)]
+// pub struct CreateSessionRequest {
+//     pub amount: i64,
+//     pub currency: String,
+//     pub reference: String,
+//     pub return_url: Option<String>,
+// }
 
-//TODO: Fill the struct with respective fields
-// Auth Struct
-pub struct WaveAuthType {
-    pub(super) api_key: Secret<String>,
-}
+// impl TryFrom<&PaymentsAuthorizeRouterData> for CreateSessionRequest {
+//     type Error = Report<ConnectorError>;
+//     fn try_from(req: &PaymentsAuthorizeRouterData) -> Result<Self, Self::Error> {
+//         let amount = req.request.amount;
+//         let currency = req.request.currency.to_string();
+//         let reference = req.request.connector_request_reference_id.clone().unwrap_or_default();
+//         let return_url = req.request.return_url.clone();
+//         Ok(Self { amount, currency, reference, return_url })
+//     }
+// }
 
-impl TryFrom<&ConnectorAuthType> for WaveAuthType {
-    type Error = error_stack::Report<errors::ConnectorError>;
-    fn try_from(auth_type: &ConnectorAuthType) -> Result<Self, Self::Error> {
-        match auth_type {
-            ConnectorAuthType::HeaderKey { api_key } => Ok(Self {
-                api_key: api_key.to_owned(),
-            }),
-            _ => Err(errors::ConnectorError::FailedToObtainAuthType.into()),
-        }
-    }
-}
-// PaymentsResponse
-//TODO: Append the remaining status flags
-#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq)]
-#[serde(rename_all = "lowercase")]
-pub enum WavePaymentStatus {
-    Succeeded,
-    Failed,
-    #[default]
-    Processing,
-}
+// #[derive(Debug, Clone, Serialize, Deserialize)]
+// pub struct CreateSessionResponse {
+//     pub launch_url: Option<String>,
+//     pub transaction_id: Option<String>,
+// }
 
-impl From<WavePaymentStatus> for common_enums::AttemptStatus {
-    fn from(item: WavePaymentStatus) -> Self {
-        match item {
-            WavePaymentStatus::Succeeded => Self::Charged,
-            WavePaymentStatus::Failed => Self::Failure,
-            WavePaymentStatus::Processing => Self::Authorizing,
-        }
-    }
-}
+// #[derive(Debug, Clone, Serialize, Deserialize)]
+// pub struct RefundRequest {
+//     pub amount: i64,
+// }
 
-//TODO: Fill the struct with respective fields
-#[derive(Default, Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct WavePaymentsResponse {
-    status: WavePaymentStatus,
-    id: String,
-}
+// impl<T> TryFrom<&hyperswitch_domain_models::types::RefundsRouterData<T>> for RefundRequest {
+//     type Error = Report<ConnectorError>;
+//     fn try_from(req: &hyperswitch_domain_models::types::RefundsRouterData<T>) -> Result<Self, Self::Error> {
+//         Ok(Self { amount: req.request.amount })
+//     }
+// }
 
-impl<F, T> TryFrom<ResponseRouterData<F, WavePaymentsResponse, T, PaymentsResponseData>>
-    for RouterData<F, T, PaymentsResponseData>
-{
-    type Error = error_stack::Report<errors::ConnectorError>;
-    fn try_from(
-        item: ResponseRouterData<F, WavePaymentsResponse, T, PaymentsResponseData>,
-    ) -> Result<Self, Self::Error> {
-        Ok(Self {
-            status: common_enums::AttemptStatus::from(item.response.status),
-            response: Ok(PaymentsResponseData::TransactionResponse {
-                resource_id: ResponseId::ConnectorTransactionId(item.response.id),
-                redirection_data: Box::new(None),
-                mandate_reference: Box::new(None),
-                connector_metadata: None,
-                network_txn_id: None,
-                connector_response_reference_id: None,
-                incremental_authorization_allowed: None,
-                charges: None,
-            }),
-            ..item.data
-        })
-    }
-}
+// #[derive(Debug, Clone, Serialize, Deserialize)]
+// pub struct RefundResp {
+//     pub refund_id: Option<String>,
+//     pub status: Option<String>,
+// }
 
-//TODO: Fill the struct with respective fields
-// REFUND :
-// Type definition for RefundRequest
-#[derive(Default, Debug, Serialize)]
-pub struct WaveRefundRequest {
-    pub amount: StringMinorUnit,
-}
-
-impl<F> TryFrom<&WaveRouterData<&RefundsRouterData<F>>> for WaveRefundRequest {
-    type Error = error_stack::Report<errors::ConnectorError>;
-    fn try_from(item: &WaveRouterData<&RefundsRouterData<F>>) -> Result<Self, Self::Error> {
-        Ok(Self {
-            amount: item.amount.to_owned(),
-        })
-    }
-}
-
-// Type definition for Refund Response
-
-#[allow(dead_code)]
-#[derive(Debug, Copy, Serialize, Default, Deserialize, Clone)]
-pub enum RefundStatus {
-    Succeeded,
-    Failed,
-    #[default]
-    Processing,
-}
-
-impl From<RefundStatus> for enums::RefundStatus {
-    fn from(item: RefundStatus) -> Self {
-        match item {
-            RefundStatus::Succeeded => Self::Success,
-            RefundStatus::Failed => Self::Failure,
-            RefundStatus::Processing => Self::Pending,
-            //TODO: Review mapping
-        }
-    }
-}
-
-//TODO: Fill the struct with respective fields
-#[derive(Default, Debug, Clone, Serialize, Deserialize)]
-pub struct RefundResponse {
-    id: String,
-    status: RefundStatus,
-}
-
-impl TryFrom<RefundsResponseRouterData<Execute, RefundResponse>> for RefundsRouterData<Execute> {
-    type Error = error_stack::Report<errors::ConnectorError>;
-    fn try_from(
-        item: RefundsResponseRouterData<Execute, RefundResponse>,
-    ) -> Result<Self, Self::Error> {
-        Ok(Self {
-            response: Ok(RefundsResponseData {
-                connector_refund_id: item.response.id.to_string(),
-                refund_status: enums::RefundStatus::from(item.response.status),
-            }),
-            ..item.data
-        })
-    }
-}
-
-impl TryFrom<RefundsResponseRouterData<RSync, RefundResponse>> for RefundsRouterData<RSync> {
-    type Error = error_stack::Report<errors::ConnectorError>;
-    fn try_from(
-        item: RefundsResponseRouterData<RSync, RefundResponse>,
-    ) -> Result<Self, Self::Error> {
-        Ok(Self {
-            response: Ok(RefundsResponseData {
-                connector_refund_id: item.response.id.to_string(),
-                refund_status: enums::RefundStatus::from(item.response.status),
-            }),
-            ..item.data
-        })
-    }
-}
-
-//TODO: Fill the struct with respective fields
-#[derive(Default, Debug, Serialize, Deserialize, PartialEq)]
-pub struct WaveErrorResponse {
-    pub status_code: u16,
-    pub code: String,
-    pub message: String,
-    pub reason: Option<String>,
-    pub network_advice_code: Option<String>,
-    pub network_decline_code: Option<String>,
-    pub network_error_message: Option<String>,
-}
+// #[derive(Debug, Clone, Serialize, Deserialize)]
+// pub struct WaveErrorResponse {
+//     pub error_code: Option<String>,
+//     pub message: Option<String>,
+//     pub transaction_id: Option<String>,
+// }
