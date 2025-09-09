@@ -161,6 +161,7 @@ pub enum RoutableConnectors {
     // UnifiedAuthenticationService,
     // Vgs
     Volt,
+    Wave,
     Wellsfargo,
     // Wellsfargopayout,
     Wise,
@@ -336,6 +337,7 @@ pub enum Connector {
     // UnifiedAuthenticationService,
     Vgs,
     Volt,
+    Wave,
     Wellsfargo,
     // Wellsfargopayout,
     Wise,
@@ -518,6 +520,7 @@ impl Connector {
             // | Self::UnifiedAuthenticationService
             | Self::Vgs
             | Self::Volt
+            | Self::Wave
             | Self::Wellsfargo
             // | Self::Wellsfargopayout
             | Self::Wise
@@ -708,6 +711,7 @@ impl From<RoutableConnectors> for Connector {
             RoutableConnectors::Hipay => Self::Hipay,
             RoutableConnectors::Paytm => Self::Paytm,
             RoutableConnectors::Phonepe => Self::Phonepe,
+            RoutableConnectors::Wave => Self::Wave,
         }
     }
 }
@@ -840,6 +844,7 @@ impl TryFrom<Connector> for RoutableConnectors {
             Connector::Redsys => Ok(Self::Redsys),
             Connector::Paytm => Ok(Self::Paytm),
             Connector::Phonepe => Ok(Self::Phonepe),
+            Connector::Wave => Ok(Self::Wave),
             Connector::CtpMastercard
             | Connector::Gpayments
             | Connector::HyperswitchVault

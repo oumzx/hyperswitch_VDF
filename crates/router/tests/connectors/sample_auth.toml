@@ -366,3 +366,6 @@ api_key="API Key"
 
 [bluecode]
 api_key="EOrder Token"
+
+[wave]
+api_key="API Key"

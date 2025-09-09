@@ -487,6 +487,10 @@ impl ConnectorAuthTypeAndMetadataValidation<'_> {
                 volt::transformers::VoltAuthType::try_from(self.auth_type)?;
                 Ok(())
             }
+            api_enums::Connector::Wave => {
+                wave::transformers::WaveAuthType::try_from(self.auth_type)?;
+                Ok(())
+            }
             api_enums::Connector::Wellsfargo => {
                 wellsfargo::transformers::WellsfargoAuthType::try_from(self.auth_type)?;
                 Ok(())
