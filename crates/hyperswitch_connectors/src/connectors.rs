@@ -116,6 +116,20 @@ pub mod tsys;
 pub mod unified_authentication_service;
 pub mod vgs;
 pub mod volt;
+pub mod wave;
+pub mod wave;
+pub mod wave;
+pub mod wave;
+pub mod wave;
+pub mod wave;
+pub mod wave;
+pub mod wave;
+pub mod wave;
+pub mod wave;
+pub mod wave;
+pub mod wave;
+pub mod wave;
+pub mod wave;
 pub mod wellsfargo;
 pub mod wellsfargopayout;
 pub mod wise;
@@ -156,7 +170,7 @@ pub use self::{
     silverflow::Silverflow, square::Square, stax::Stax, stripe::Stripe,
     stripebilling::Stripebilling, taxjar::Taxjar, threedsecureio::Threedsecureio, thunes::Thunes,
     tokenio::Tokenio, trustpay::Trustpay, trustpayments::Trustpayments, tsys::Tsys,
-    unified_authentication_service::UnifiedAuthenticationService, vgs::Vgs, volt::Volt,
+    unified_authentication_service::UnifiedAuthenticationService, vgs::Vgs, volt::Volt, wave::Wave,
     wellsfargo::Wellsfargo, wellsfargopayout::Wellsfargopayout, wise::Wise, worldline::Worldline,
     worldpay::Worldpay, worldpayvantiv::Worldpayvantiv, worldpayxml::Worldpayxml, xendit::Xendit,
     zen::Zen, zsl::Zsl,
