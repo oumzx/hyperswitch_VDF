@@ -1,0 +1,57 @@
+# Wave Connector Authentication Configuration
+# Updated for comprehensive Wave API testing with Aggregated Merchants support
+#
+# Wave API Documentation: https://docs.wave.com/
+# Supported Features:
+# - Checkout Sessions API (v1/checkout/sessions)
+# - Aggregated Merchants API (v1/aggregated_merchants)
+# - Refund Operations
+# - XOF Currency Support
+# - Enhanced merchant management with aggregated merchants
+
+[wave]
+api_key = "sk_test_your_wave_api_key_here"
+
+# Enhanced configuration with aggregated merchants support
+[wave.enhanced]
+api_key = "sk_test_enhanced_wave_key_here"
+# Enhanced config as JSON in key1 field for aggregated merchants
+key1 = '''
+{
+  "enabled": true,
+  "auto_create_on_profile_creation": false,
+  "default_business_type": "ecommerce",
+  "cache_ttl_seconds": 3600
+}
+'''
+
+# Environment configurations
+[wave.sandbox]
+api_key = "sk_test_sandbox_wave_key_here"
+base_url = "https://api.sandbox.wave.com/v1/"
+
+[wave.sandbox_with_aggregated_merchants]
+api_key = "sk_test_sandbox_wave_key_with_am_here"
+base_url = "https://api.sandbox.wave.com/v1/"
+key1 = '''
+{
+  "enabled": true,
+  "auto_create_on_profile_creation": true,
+  "default_business_type": "marketplace",
+  "cache_ttl_seconds": 7200
+}
+'''
+
+[wave.production]
+# Never commit production keys!
+api_key = "sk_live_production_key_here"
+base_url = "https://api.wave.com/v1/"
+
+# Wave API Configuration Notes:
+# - Only XOF currency is supported
+# - Amounts must be positive integers (no decimals)
+# - Bearer token authentication required
+# - All endpoints require proper merchant configuration
+# - Aggregated merchants require additional API permissions
+# - Auto-creation of aggregated merchants requires business profile information
+# - Caching is recommended for aggregated merchant data to improve performance

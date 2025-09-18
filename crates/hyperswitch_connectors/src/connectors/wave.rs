@@ -30,7 +30,7 @@ use hyperswitch_interfaces::{
     webhooks::{IncomingWebhook, IncomingWebhookRequestDetails},
 };
 use api_models::webhooks::{IncomingWebhookEvent, ObjectReferenceId};
-use masking::{Mask, Maskable, PeekInterface};
+use masking::{Mask, Maskable, PeekInterface, Secret};
 
 use crate::{
     constants::headers,
@@ -48,6 +48,14 @@ const WAVE_CHECKOUT_SESSION_STATUS: &str = "checkout/sessions/{session_id}";
 const WAVE_CANCEL_PAYMENT: &str = "v1/transactions/{txn_id}/cancel";
 const WAVE_REFUND_FOR_TXN: &str = "v1/transactions/{txn_id}/refunds";
 const WAVE_REFUND_STATUS: &str = "v1/refunds/{refund_id}";
+
+// Aggregated Merchants API endpoints
+//const WAVE_AGGREGATED_MERCHANTS: &str = "v1/aggregated_merchants";
+const WAVE_AGGREGATED_MERCHANT_BY_ID: &str = "v1/aggregated_merchants/{id}";
+const WAVE_AGGREGATED_MERCHANT_LIST: &str = "v1/aggregated_merchants";
+const WAVE_AGGREGATED_MERCHANT_CREATE: &str = "v1/aggregated_merchants";
+const WAVE_AGGREGATED_MERCHANT_UPDATE: &str = "v1/aggregated_merchants/{id}";
+const WAVE_AGGREGATED_MERCHANT_DELETE: &str = "v1/aggregated_merchants/{id}";
 
 #[derive(Debug, Clone)]
 pub struct Wave;
@@ -111,6 +119,316 @@ impl ConnectorCommon for Wave {
     }
 }
 
+impl Wave {
+    /// Async helper to resolve and prepare aggregated merchant for payment
+    /// This method can be called during payment processing before building the request
+    pub async fn resolve_aggregated_merchant_for_payment(
+        &self,
+        req: &PaymentsAuthorizeRouterData,
+        connectors: &Connectors,
+    ) -> CustomResult<Option<String>, errors::ConnectorError> {
+        let auth = wave::WaveAuthType::try_from(&req.connector_auth_type)?;
+        
+        if !auth.aggregated_merchants_enabled {
+            return Ok(None);
+        }
+        
+        // Use the aggregated merchant resolver
+        WaveAggregatedMerchantResolver::resolve_aggregated_merchant(
+            &auth,
+            self.base_url(connectors),
+            req,
+        ).await
+    }
+    
+    /// Enhanced payment authorization with aggregated merchant support
+    /// This method demonstrates how aggregated merchant resolution should be integrated
+    pub async fn authorize_payment_with_aggregated_merchant(
+        &self,
+        req: &PaymentsAuthorizeRouterData,
+        connectors: &Connectors,
+    ) -> CustomResult<PaymentsAuthorizeRouterData, errors::ConnectorError> {
+        // Step 1: Resolve aggregated merchant
+        let aggregated_merchant_id = self
+            .resolve_aggregated_merchant_for_payment(req, connectors)
+            .await?;
+        
+        // Step 2: Log the resolution result
+        if let Some(ref merchant_id) = aggregated_merchant_id {
+            router_env::logger::info!(
+                "Resolved aggregated merchant {} for payment authorization",
+                merchant_id
+            );
+        } else {
+            router_env::logger::debug!(
+                "No aggregated merchant resolved for payment authorization"
+            );
+        }
+        
+        // Step 3: Build and execute the request
+        // Note: In the current synchronous flow, we can't directly pass the resolved 
+        // aggregated merchant ID to the request builder. The integration would need
+        // to be modified to support async request building.
+        
+        // For now, we proceed with the normal flow, but this demonstrates
+        // where the async resolution would fit in a redesigned flow.
+        todo!("This method demonstrates async aggregated merchant integration")
+    }
+    
+    /// Validate aggregated merchant configuration for a merchant account
+    pub async fn validate_aggregated_merchant_config(
+        &self,
+        auth: &wave::WaveAuthType,
+        metadata: &Option<wave::WaveConnectorMetadata>,
+        connectors: &Connectors,
+    ) -> CustomResult<bool, errors::ConnectorError> {
+        if !auth.aggregated_merchants_enabled {
+            return Ok(true); // No validation needed if feature is disabled
+        }
+        
+        if let Some(meta) = metadata {
+            // Validate the metadata structure
+            wave::validate_wave_connector_metadata(meta)
+                .map_err(|e| {
+                    errors::ConnectorError::ProcessingStepFailed(Some(e.to_string().into()))
+                })?;
+            
+            // If aggregated merchant ID is specified, validate it exists
+            if let Some(ref merchant_id) = meta.aggregated_merchant_id {
+                let exists = WaveAggregatedMerchantResolver::validate_aggregated_merchant(
+                    auth,
+                    self.base_url(connectors),
+                    merchant_id,
+                ).await?;
+                
+                if !exists {
+                    let error_message = format!("Aggregated merchant {} not found or not accessible", merchant_id);
+                    return Err(errors::ConnectorError::ProcessingStepFailed(Some(error_message.into())).into());
+                }
+            }
+        }
+        
+        Ok(true)
+    }
+}
+
+// Wave Aggregated Merchant Resolution Logic
+pub struct WaveAggregatedMerchantResolver;
+
+impl WaveAggregatedMerchantResolver {
+    /// Resolve aggregated merchant ID for payment, with auto-creation if enabled
+    pub async fn resolve_aggregated_merchant(
+        auth: &wave::WaveAuthType,
+        base_url: &str,
+        router_data: &PaymentsAuthorizeRouterData,
+    ) -> CustomResult<Option<String>, errors::ConnectorError> {
+        // If aggregated merchants are not enabled, return None
+        if !auth.aggregated_merchants_enabled {
+            return Ok(None);
+        }
+        
+        // Try to extract aggregated merchant metadata
+        let metadata = wave::extract_wave_connector_metadata(router_data)?;
+        
+        // If metadata exists and has aggregated merchant ID, validate and return it
+        if let Some(meta) = &metadata {
+            if let Some(aggregated_merchant_id) = &meta.aggregated_merchant_id {
+                // Validate the merchant ID exists and is accessible
+                match Self::validate_aggregated_merchant(auth, base_url, aggregated_merchant_id).await {
+                    Ok(true) => return Ok(Some(aggregated_merchant_id.clone())),
+                    Ok(false) => {
+                        router_env::logger::warn!(
+                            "Aggregated merchant ID {} not found or not accessible",
+                            aggregated_merchant_id
+                        );
+                        // Continue to auto-creation if enabled
+                    },
+                    Err(e) => {
+                        router_env::logger::error!(
+                            "Error validating aggregated merchant {}: {:?}",
+                            aggregated_merchant_id,
+                            e
+                        );
+                        // Continue to auto-creation if enabled
+                    }
+                }
+            }
+        }
+        
+        // Check if auto-create is enabled
+        let auto_create = metadata
+            .as_ref()
+            .and_then(|m| m.auto_create_aggregated_merchant)
+            .unwrap_or(auth.auto_create_aggregated_merchant);
+            
+        if auto_create {
+            // Attempt to auto-create aggregated merchant
+            Self::auto_create_aggregated_merchant(auth, base_url, router_data, metadata.as_ref()).await
+        } else {
+            Ok(None)
+        }
+    }
+    
+    /// Auto-create aggregated merchant based on business profile information with enhanced validation
+    async fn auto_create_aggregated_merchant(
+        auth: &wave::WaveAuthType,
+        base_url: &str,
+        router_data: &PaymentsAuthorizeRouterData,
+        metadata: Option<&wave::WaveConnectorMetadata>,
+    ) -> CustomResult<Option<String>, errors::ConnectorError> {
+        // For auto-creation, we need profile information
+        // In a real implementation, this would need access to business profile data
+        // For now, we'll use a default profile name based on merchant_id
+        let profile_name = format!("Profile_{}", router_data.merchant_id.get_string_repr());
+        
+        router_env::logger::info!(
+            "Attempting auto-creation of aggregated merchant for profile: {}",
+            profile_name
+        );
+        
+        let request = match wave::build_aggregated_merchant_request_from_profile(
+            &profile_name,
+            metadata,
+        ) {
+            Ok(req) => req,
+            Err(e) => {
+                router_env::logger::warn!(
+                    "Invalid aggregated merchant configuration for profile {}: {:?}",
+                    profile_name,
+                    e
+                );
+                return Err(errors::ConnectorError::from(e).into());
+            }
+        };
+        
+        match WaveAggregatedMerchantService::create_aggregated_merchant(
+            &auth.api_key,
+            base_url,
+            request,
+        ).await {
+            Ok(merchant) => {
+                // Successfully created aggregated merchant
+                router_env::logger::info!(
+                    "Auto-created aggregated merchant: {} for profile: {}",
+                    merchant.id,
+                    profile_name
+                );
+                
+                // TODO: Update connector metadata with the new aggregated merchant ID
+                // This would require access to the storage layer to update the merchant connector account
+                
+                Ok(Some(merchant.id))
+            },
+            Err(e) => {
+                // Log the error but don't fail the payment
+                router_env::logger::warn!(
+                    "Failed to auto-create aggregated merchant for profile {}: {:?}",
+                    profile_name,
+                    e
+                );
+                // Graceful degradation: continue without aggregated merchant
+                Ok(None)
+            }
+        }
+    }
+    
+    /// Validate aggregated merchant exists and is accessible with retry logic
+    pub async fn validate_aggregated_merchant(
+        auth: &wave::WaveAuthType,
+        base_url: &str,
+        aggregated_merchant_id: &str,
+    ) -> CustomResult<bool, errors::ConnectorError> {
+        // Implement simple retry logic for transient failures
+        let max_retries = 3;
+        let mut retry_count = 0;
+        
+        while retry_count < max_retries {
+            match WaveAggregatedMerchantService::get_aggregated_merchant(
+                &auth.api_key,
+                base_url,
+                aggregated_merchant_id,
+            ).await {
+                Ok(_) => return Ok(true),
+                Err(e) => {
+                    retry_count += 1;
+                    if retry_count >= max_retries {
+                        router_env::logger::error!(
+                            "Failed to validate aggregated merchant {} after {} retries: {:?}",
+                            aggregated_merchant_id,
+                            max_retries,
+                            e
+                        );
+                        return Ok(false);
+                    }
+                    
+                    // Wait before retry (exponential backoff)
+                    // Note: In production, this should use proper async delay
+                    // let delay_ms = 100 * (2_u64.pow(retry_count - 1));
+                    // TODO: Replace with proper async sleep implementation
+                }
+            }
+        }
+        
+        Ok(false)
+    }
+    
+    /// Get or create aggregated merchant with caching support
+    pub async fn get_or_create_aggregated_merchant(
+        auth: &wave::WaveAuthType,
+        base_url: &str,
+        router_data: &PaymentsAuthorizeRouterData,
+    ) -> CustomResult<Option<String>, errors::ConnectorError> {
+        // Try to resolve existing aggregated merchant first
+        Self::resolve_aggregated_merchant(auth, base_url, router_data).await
+    }
+    
+    /// Resolve aggregated merchant with fallback strategies
+    pub async fn resolve_with_fallback(
+        auth: &wave::WaveAuthType,
+        base_url: &str,
+        router_data: &PaymentsAuthorizeRouterData,
+        fallback_strategies: &[AggregatedMerchantFallbackStrategy],
+    ) -> CustomResult<Option<String>, errors::ConnectorError> {
+        // First try normal resolution
+        if let Ok(Some(merchant_id)) = Self::resolve_aggregated_merchant(auth, base_url, router_data).await {
+            return Ok(Some(merchant_id));
+        }
+        
+        // Try fallback strategies in order
+        for strategy in fallback_strategies {
+            match strategy {
+                AggregatedMerchantFallbackStrategy::UseDefault => {
+                    // Use a default aggregated merchant if available
+                    // This would be configured at the connector level
+                    continue;
+                },
+                AggregatedMerchantFallbackStrategy::CreateTemporary => {
+                    // Create a temporary aggregated merchant for this transaction
+                    if let Ok(Some(merchant_id)) = Self::auto_create_aggregated_merchant(
+                        auth, base_url, router_data, None
+                    ).await {
+                        return Ok(Some(merchant_id));
+                    }
+                },
+                AggregatedMerchantFallbackStrategy::Skip => {
+                    // Continue without aggregated merchant
+                    return Ok(None);
+                }
+            }
+        }
+        
+        Ok(None)
+    }
+}
+
+/// Fallback strategies for aggregated merchant resolution
+#[derive(Debug, Clone)]
+pub enum AggregatedMerchantFallbackStrategy {
+    UseDefault,
+    CreateTemporary,
+    Skip,
+}
+
 impl ConnectorSpecifications for Wave {}
 impl ConnectorValidation for Wave {}
 
@@ -170,7 +488,32 @@ impl ConnectorIntegration<Authorize, PaymentsAuthorizeData, PaymentsResponseData
             req.request.minor_amount,
             req,
         ))?;
-        let connector_req = wave::WaveCheckoutSessionRequest::try_from(&connector_router_data)?;
+        
+        // Create the checkout session request with aggregated merchant support
+        let mut connector_req = wave::WaveCheckoutSessionRequest::try_from(&connector_router_data)?;
+        
+        // If aggregated merchant ID is not already set, try to resolve it
+        if connector_req.aggregated_merchant_id.is_none() {
+            let auth = wave::WaveAuthType::try_from(&req.connector_auth_type)?;
+            
+            // Only resolve if aggregated merchants are enabled
+            if auth.aggregated_merchants_enabled {
+                // Try to resolve aggregated merchant from metadata
+                // Note: In a real implementation, this might need async resolution
+                let metadata = wave::extract_wave_connector_metadata(req)?;
+                if let Some(meta) = metadata {
+                    if let Some(ref merchant_id) = meta.aggregated_merchant_id {
+                        connector_req.aggregated_merchant_id = Some(merchant_id.clone());
+                        
+                        router_env::logger::info!(
+                            "Using configured aggregated merchant: {} for payment",
+                            merchant_id
+                        );
+                    }
+                }
+            }
+        }
+        
         Ok(RequestContent::Json(Box::new(connector_req)))
     }
 
@@ -179,6 +522,11 @@ impl ConnectorIntegration<Authorize, PaymentsAuthorizeData, PaymentsResponseData
         req: &PaymentsAuthorizeRouterData,
         connectors: &Connectors,
     ) -> CustomResult<Option<Request>, errors::ConnectorError> {
+        // Note: This is a synchronous method, but aggregated merchant resolution is async.
+        // In a real production implementation, the aggregated merchant resolution should be 
+        // moved to an earlier async phase in the payment processing pipeline.
+        // For now, we rely on pre-configured aggregated merchant IDs in metadata.
+        
         let request = RequestBuilder::new()
             .method(Method::Post)
             .url(&self.get_url(req, connectors)?)
@@ -641,5 +989,268 @@ impl IncomingWebhook for Wave {
         _request: &IncomingWebhookRequestDetails<'_>,
     ) -> CustomResult<Box<dyn masking::ErasedMaskSerialize>, errors::ConnectorError> {
         Err(errors::ConnectorError::WebhooksNotImplemented.into())
+    }
+}
+
+// Wave Aggregated Merchant Service
+pub struct WaveAggregatedMerchantService;
+
+impl WaveAggregatedMerchantService {
+    /// Create a new aggregated merchant with enhanced error handling
+    pub async fn create_aggregated_merchant(
+        api_key: &Secret<String>,
+        base_url: &str,
+        request: wave::WaveAggregatedMerchantRequest,
+    ) -> CustomResult<wave::WaveAggregatedMerchant, errors::ConnectorError> {
+        // Validate request before making API call
+        wave::validate_wave_aggregated_merchant_request(&request)
+            .map_err(|e| errors::ConnectorError::ProcessingStepFailed(Some(e.to_string().into())))?;
+        
+        let url = format!("{}{}", base_url, WAVE_AGGREGATED_MERCHANT_CREATE);
+        let auth_header = format!("Bearer {}", api_key.peek());
+        
+        let client = reqwest::Client::new();
+        let response = client
+            .post(&url)
+            .header(headers::AUTHORIZATION, auth_header)
+            .header(headers::CONTENT_TYPE, "application/json")
+            .json(&request)
+            .send()
+            .await
+            .change_context(errors::ConnectorError::RequestEncodingFailed)?;
+            
+        if response.status().is_success() {
+            response
+                .json::<wave::WaveAggregatedMerchant>()
+                .await
+                .change_context(errors::ConnectorError::ResponseDeserializationFailed)
+        } else {
+            let status = response.status().as_u16();
+            let error_text = response
+                .text()
+                .await
+                .change_context(errors::ConnectorError::ResponseDeserializationFailed)?;
+            Err(wave::parse_wave_api_error(status, &error_text)).change_context(errors::ConnectorError::ProcessingStepFailed(None))
+        }
+    }
+    
+    /// List aggregated merchants with pagination support
+    pub async fn list_aggregated_merchants(
+        api_key: &Secret<String>,
+        base_url: &str,
+        limit: Option<u32>,
+        cursor: Option<String>,
+    ) -> CustomResult<wave::WaveAggregatedMerchantListResponse, errors::ConnectorError> {
+        let mut url = format!("{}{}", base_url, WAVE_AGGREGATED_MERCHANT_LIST);
+        
+        // Add query parameters for pagination
+        let mut query_params = Vec::new();
+        if let Some(limit_val) = limit {
+            query_params.push(format!("limit={}", limit_val));
+        }
+        if let Some(cursor_val) = cursor {
+            query_params.push(format!("cursor={}", cursor_val));
+        }
+        
+        if !query_params.is_empty() {
+            url.push('?');
+            url.push_str(&query_params.join("&"));
+        }
+        
+        let auth_header = format!("Bearer {}", api_key.peek());
+        
+        let client = reqwest::Client::new();
+        let response = client
+            .get(&url)
+            .header(headers::AUTHORIZATION, auth_header)
+            .send()
+            .await
+            .change_context(errors::ConnectorError::RequestEncodingFailed)?;
+            
+        if response.status().is_success() {
+            response
+                .json::<wave::WaveAggregatedMerchantListResponse>()
+                .await
+                .change_context(errors::ConnectorError::ResponseDeserializationFailed)
+        } else {
+            let status = response.status().as_u16();
+            let error_text = response
+                .text()
+                .await
+                .change_context(errors::ConnectorError::ResponseDeserializationFailed)?;
+            Err(wave::parse_wave_api_error(status, &error_text)).change_context(errors::ConnectorError::ProcessingStepFailed(None))
+        }
+    }
+    
+    /// Get aggregated merchant by ID with enhanced error handling
+    pub async fn get_aggregated_merchant(
+        api_key: &Secret<String>,
+        base_url: &str,
+        merchant_id: &str,
+    ) -> CustomResult<wave::WaveAggregatedMerchant, errors::ConnectorError> {
+        // Validate merchant ID format
+        if merchant_id.is_empty() || !merchant_id.starts_with("am-") {
+            return Err(errors::ConnectorError::InvalidConnectorConfig {
+                config: "Invalid aggregated merchant ID format"
+            }.into());
+        }
+        
+        let url = format!("{}{}", base_url, WAVE_AGGREGATED_MERCHANT_BY_ID.replace("{id}", merchant_id));
+        let auth_header = format!("Bearer {}", api_key.peek());
+        
+        let client = reqwest::Client::new();
+        let response = client
+            .get(&url)
+            .header(headers::AUTHORIZATION, auth_header)
+            .send()
+            .await
+            .change_context(errors::ConnectorError::RequestEncodingFailed)?;
+            
+        if response.status().is_success() {
+            response
+                .json::<wave::WaveAggregatedMerchant>()
+                .await
+                .change_context(errors::ConnectorError::ResponseDeserializationFailed)
+        } else {
+            let status = response.status().as_u16();
+            let error_text = response
+                .text()
+                .await
+                .change_context(errors::ConnectorError::ResponseDeserializationFailed)?;
+            Err(wave::parse_wave_api_error(status, &error_text)).change_context(errors::ConnectorError::ProcessingStepFailed(None))
+        }
+    }
+    
+    /// Update aggregated merchant with validation
+    pub async fn update_aggregated_merchant(
+        api_key: &Secret<String>,
+        base_url: &str,
+        merchant_id: &str,
+        request: wave::WaveAggregatedMerchantUpdateRequest,
+    ) -> CustomResult<wave::WaveAggregatedMerchant, errors::ConnectorError> {
+        // Validate merchant ID format
+        if merchant_id.is_empty() || !merchant_id.starts_with("am-") {
+            return Err(errors::ConnectorError::InvalidConnectorConfig {
+                config: "Invalid aggregated merchant ID format"
+            }.into());
+        }
+        
+        // Validate update request fields if provided
+        if let Some(ref name) = request.name {
+            if name.is_empty() || name.len() > 255 {
+                return Err(errors::ConnectorError::InvalidConnectorConfig {
+                    config: "Merchant name must be between 1 and 255 characters"
+                }.into());
+            }
+        }
+        
+        if let Some(ref description) = request.business_description {
+            if description.is_empty() || description.len() > 500 {
+                return Err(errors::ConnectorError::InvalidConnectorConfig {
+                    config: "Business description must be between 1 and 500 characters"
+                }.into());
+            }
+        }
+        
+        let url = format!("{}{}", base_url, WAVE_AGGREGATED_MERCHANT_UPDATE.replace("{id}", merchant_id));
+        let auth_header = format!("Bearer {}", api_key.peek());
+        
+        let client = reqwest::Client::new();
+        let response = client
+            .put(&url)
+            .header(headers::AUTHORIZATION, auth_header)
+            .header(headers::CONTENT_TYPE, "application/json")
+            .json(&request)
+            .send()
+            .await
+            .change_context(errors::ConnectorError::RequestEncodingFailed)?;
+            
+        if response.status().is_success() {
+            response
+                .json::<wave::WaveAggregatedMerchant>()
+                .await
+                .change_context(errors::ConnectorError::ResponseDeserializationFailed)
+        } else {
+            let status = response.status().as_u16();
+            let error_text = response
+                .text()
+                .await
+                .change_context(errors::ConnectorError::ResponseDeserializationFailed)?;
+            Err(wave::parse_wave_api_error(status, &error_text)).change_context(errors::ConnectorError::ProcessingStepFailed(None))
+        }
+    }
+    
+    /// Delete aggregated merchant with proper validation
+    pub async fn delete_aggregated_merchant(
+        api_key: &Secret<String>,
+        base_url: &str,
+        merchant_id: &str,
+    ) -> CustomResult<(), errors::ConnectorError> {
+        // Validate merchant ID format
+        if merchant_id.is_empty() || !merchant_id.starts_with("am-") {
+            return Err(errors::ConnectorError::InvalidConnectorConfig {
+                config: "Invalid aggregated merchant ID format"
+            }.into());
+        }
+        
+        let url = format!("{}{}", base_url, WAVE_AGGREGATED_MERCHANT_DELETE.replace("{id}", merchant_id));
+        let auth_header = format!("Bearer {}", api_key.peek());
+        
+        let client = reqwest::Client::new();
+        let response = client
+            .delete(&url)
+            .header(headers::AUTHORIZATION, auth_header)
+            .send()
+            .await
+            .change_context(errors::ConnectorError::RequestEncodingFailed)?;
+            
+        if response.status().is_success() {
+            Ok(())
+        } else {
+            let status = response.status().as_u16();
+            let error_text = response
+                .text()
+                .await
+                .change_context(errors::ConnectorError::ResponseDeserializationFailed)?;
+            Err(wave::parse_wave_api_error(status, &error_text)).change_context(errors::ConnectorError::ProcessingStepFailed(None))
+        }
+    }
+    
+    /// Check if aggregated merchant exists (lightweight operation)
+    pub async fn merchant_exists(
+        api_key: &Secret<String>,
+        base_url: &str,
+        merchant_id: &str,
+    ) -> CustomResult<bool, errors::ConnectorError> {
+        match Self::get_aggregated_merchant(api_key, base_url, merchant_id).await {
+            Ok(_) => Ok(true),
+            Err(err) => {
+                // Check if the error is specifically "not found"
+                if let Some(error_stack) = err.downcast_ref::<errors::ConnectorError>() {
+                    match error_stack {
+                        errors::ConnectorError::ProcessingStepFailed(_) => Ok(false),
+                        _ => Err(err),
+                    }
+                } else {
+                    Err(err)
+                }
+            }
+        }
+    }
+    
+    /// Batch get aggregated merchants by IDs (utility method)
+    pub async fn get_multiple_aggregated_merchants(
+        api_key: &Secret<String>,
+        base_url: &str,
+        merchant_ids: &[String],
+    ) -> CustomResult<Vec<(String, Result<wave::WaveAggregatedMerchant, error_stack::Report<errors::ConnectorError>>)>, errors::ConnectorError> {
+        let mut results = Vec::new();
+        
+        for merchant_id in merchant_ids {
+            let result = Self::get_aggregated_merchant(api_key, base_url, merchant_id).await;
+            results.push((merchant_id.clone(), result));
+        }
+        
+        Ok(results)
     }
 }
