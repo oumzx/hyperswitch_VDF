@@ -46,8 +46,8 @@ pub use hyperswitch_connectors::connectors::{
     tokenex::Tokenex, tokenio, tokenio::Tokenio, trustpay, trustpay::Trustpay, trustpayments,
     trustpayments::Trustpayments, tsys, tsys::Tsys, unified_authentication_service,
     unified_authentication_service::UnifiedAuthenticationService, vgs, vgs::Vgs, volt, volt::Volt,
-    wellsfargo, wellsfargo::Wellsfargo, wellsfargopayout, wellsfargopayout::Wellsfargopayout, wise,
-    wise::Wise, worldline, worldline::Worldline, worldpay, worldpay::Worldpay, worldpayvantiv,
-    worldpayvantiv::Worldpayvantiv, worldpayxml, worldpayxml::Worldpayxml, xendit, xendit::Xendit,
-    zen, zen::Zen, zsl, zsl::Zsl,
+    wave, wave::Wave, wellsfargo, wellsfargo::Wellsfargo, wellsfargopayout,
+    wellsfargopayout::Wellsfargopayout, wise, wise::Wise, worldline, worldline::Worldline,
+    worldpay, worldpay::Worldpay, worldpayvantiv, worldpayvantiv::Worldpayvantiv, worldpayxml,
+    worldpayxml::Worldpayxml, xendit, xendit::Xendit, zen, zen::Zen, zsl, zsl::Zsl,
 };

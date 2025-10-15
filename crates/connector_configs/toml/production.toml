@@ -6182,3 +6182,7 @@ placeholder="Enter Payment Processing Details At"
 required=true
 type="Radio"
 options=["Hyperswitch"]
+
+[wave]
+[wave.connector_auth.HeaderKey]
+api_key = "API Key"

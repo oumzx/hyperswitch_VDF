@@ -241,6 +241,7 @@ blackhawknetwork.base_url = "https://api-sandbox.blackhawknetwork.com/"
 calida.base_url = "https://dev.eorder.reloadhero.com/"
 bluesnap.base_url = "https://sandbox.bluesnap.com/"
 bluesnap.secondary_base_url = "https://sandpay.bluesnap.com/"
+bluecode.base_url = "https://api.bluecode.com/"
 boku.base_url = "https://$-api4-stage.boku.com"
 braintree.base_url = "https://payments.sandbox.braintree-api.com/graphql"
 breadpay.base_url = "https://api-sandbox.getbread.com"
@@ -364,6 +365,7 @@ tsys.base_url = "https://stagegw.transnox.com/"
 unified_authentication_service.base_url = "http://localhost:8000/"
 vgs.base_url = "https://api.sandbox.verygoodvault.com/"
 volt.base_url = "https://api.sandbox.volt.io/"
+wave.base_url = "https://api.wave.com"
 wellsfargo.base_url = "https://apitest.cybersource.com/"
 wellsfargopayout.base_url = "https://api-sandbox.wellsfargo.com/"
 trustpay.base_url_bank_redirects = "https://aapi.trustpay.eu/"
@@ -1045,6 +1047,7 @@ nexixpay = { payment_method = "card" }
 redsys = { payment_method = "card" }
 
 [connector_customer]
+connector_list = "stripe,adyen"
 payout_connector_list = "nomupay,stripe,wise"
 
 [dummy_connector]
@@ -1320,7 +1323,7 @@ id = "12345"
 card_networks = "Visa, AmericanExpress, Mastercard"
 
 [network_tokenization_supported_connectors]
-connector_list = "adyen,cybersource,peachpayments"
+connector_list = "adyen,cybersource"
 
 [grpc_client.dynamic_routing_client]
 host = "localhost"

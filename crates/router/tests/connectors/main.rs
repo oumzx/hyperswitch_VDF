@@ -123,6 +123,7 @@ mod unified_authentication_service;
 mod utils;
 mod vgs;
 mod volt;
+mod wave;
 mod wellsfargo;
 mod worldpayvantiv;
 // mod wellsfargopayout;
